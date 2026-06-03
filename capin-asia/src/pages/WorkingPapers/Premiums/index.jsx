@@ -75,18 +75,18 @@ const Premiums = () => {
                   <tr>
                     <th>GL code</th>
                     <th>Policy number</th>
-                    <th>Total Policy</th>
-                    <th>Premium received</th>
-                    <th>Premium receivable</th>
+                    <th className="num">Total Policy</th>
+                    <th className="num">Premium received</th>
+                    <th className="num">Premium receivable</th>
                     <th>Policy start date</th>
                     <th>Policy end date</th>
-                    <th>Policy period days</th>
-                    <th>Policy inception days</th>
-                    <th>Policy earned days</th>
+                    <th className="num">Policy period days</th>
+                    <th className="num">Policy inception days</th>
+                    <th className="num">Policy earned days</th>
                     <th>Earning Method</th>
-                    <th>Current year earning</th>
-                    <th>Unearned Premium</th>
-                    <th>Remaining policy days</th>
+                    <th className="num">Current year earning</th>
+                    <th className="num">Unearned Premium</th>
+                    <th className="num">Remaining policy days</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -111,18 +111,18 @@ const Premiums = () => {
                       <tr key={index}>
                         <td>{glcode}</td>
                         <td>{policyNumber}</td>
-                        <td>{totalPolicy}</td>
-                        <td>{preimumRecevied}</td>
-                        <td>{balanceReceivable}</td>
+                        <td className="num">{totalPolicy}</td>
+                        <td className="num">{preimumRecevied}</td>
+                        <td className="num">{balanceReceivable}</td>
                         <td>{dayjs(policyStartDate).format("MM/DD/YYYY")}</td>
                         <td>{dayjs(policyEndDate).format("MM/DD/YYYY")}</td>
-                        <td>{policyPeriodDays}</td>
-                        <td>{policyInceptionDays}</td>
-                        <td>{policyEarnedDays}</td>
+                        <td className="num">{policyPeriodDays}</td>
+                        <td className="num">{policyInceptionDays}</td>
+                        <td className="num">{policyEarnedDays}</td>
                         <td>{earningMethod}</td>
-                        <td>{currentYearEarning}</td>
-                        <td>{unearnedPremium}</td>
-                        <td>{remainingPolicyDays}</td>
+                        <td className="num">{currentYearEarning}</td>
+                        <td className="num">{unearnedPremium}</td>
+                        <td className="num">{remainingPolicyDays}</td>
                       </tr>
                     );
                   })}

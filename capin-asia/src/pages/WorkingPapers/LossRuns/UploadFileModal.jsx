@@ -88,16 +88,16 @@ const UploadFileModal = ({
             </p>
             <table>
               <thead>
-                <th>Row</th>
-                <th>Col</th>
+                <th className="num">Row</th>
+                <th className="num">Col</th>
                 <th>Error</th>
               </thead>
               <tbody>
                 {fileValidation.map((element, index) => {
                   return (
                     <tr key={index}>
-                      <td>{element.row}</td>
-                      <td>{element.column}</td>
+                      <td className="num">{element.row}</td>
+                      <td className="num">{element.column}</td>
                       <td>{element.error}</td>
                     </tr>
                   );

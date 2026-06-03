@@ -74,12 +74,12 @@ const Prepaid = () => {
                 <thead>
                   <tr>
                     <th>GL code</th>
-                    <th>Amount</th>
-                    <th>Closing Balance</th>
-                    <th>Expense till date</th>
-                    <th>Expense for the year</th>
-                    <th>No of months/days expensed for</th>
-                    <th>No of months/days paid for</th>
+                    <th className="num">Amount</th>
+                    <th className="num">Closing Balance</th>
+                    <th className="num">Expense till date</th>
+                    <th className="num">Expense for the year</th>
+                    <th className="num">No of months/days expensed for</th>
+                    <th className="num">No of months/days paid for</th>
                     <th>Prepaid end date</th>
                     <th>Prepaid start date</th>
                     <th>Description</th>
@@ -102,12 +102,12 @@ const Prepaid = () => {
                     return (
                       <tr key={index}>
                         <td>{glcode}</td>
-                        <td>{amount}</td>
-                        <td>{closingBalance}</td>
-                        <td>{expenseTillDate}</td>
-                        <td>{expenseForTheYear}</td>
-                        <td>{noOfMonthsDaysExpensedFor}</td>
-                        <td>{noOfMonthsDaysPaidFor}</td>
+                        <td className="num">{amount}</td>
+                        <td className="num">{closingBalance}</td>
+                        <td className="num">{expenseTillDate}</td>
+                        <td className="num">{expenseForTheYear}</td>
+                        <td className="num">{noOfMonthsDaysExpensedFor}</td>
+                        <td className="num">{noOfMonthsDaysPaidFor}</td>
                         <td>{dayjs(prepaidEndDate).format("MM/DD/YYYY")}</td>
                         <td>{dayjs(prepaidStartDate).format("MM/DD/YYYY")}</td>
                         <td>{description}</td>

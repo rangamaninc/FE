@@ -13,6 +13,11 @@ export const createNewTransaction = async (clientId, cashbookId, data) => {
   return res.data;
 };
 
+export const getOpeningBalances = async (clientId) => {
+  const res = await axios.get(`/cashbook/${clientId}/opening-balance`);
+  return res.data;
+};
+
 export const addOpeningBalance = async (clientId, data) => {
   const res = await axios.post(`/cashbook/${clientId}/opening-balance`, data);
   return res.data;

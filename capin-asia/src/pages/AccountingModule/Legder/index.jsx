@@ -151,9 +151,9 @@ export default function Ledger() {
                   <tr>
                     <th>Transaction date</th>
                     <th>Transaction type</th>
-                    <th>Transaction Id</th>
+                    <th className="num">Transaction Id</th>
                     {/* <th>GLCode</th> */}
-                    <th>Amount</th>
+                    <th className="num">Amount</th>
                     <th>Description</th>
                   </tr>
                 </thead>
@@ -170,9 +170,9 @@ export default function Ledger() {
                       <tr key={transactionid}>
                         <td>{dayjs(transactionDate).format("MM/DD/YYYY")}</td>
                         <td>{type}</td>
-                        <td>{transactionid}</td>
+                        <td className="num">{transactionid}</td>
                         {/* <td>{glcode}</td> */}
-                        <td>{amount}</td>
+                        <td className="num">{amount}</td>
                         <td>{description}</td>
                       </tr>
                     );

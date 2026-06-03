@@ -149,11 +149,11 @@ const LossRuns = () => {
                 <th>Claimant</th>
                 <th>Date 1</th>
                 <th>Date 2</th>
-                <th>Expense Paid Diff</th>
-                <th>Expense Reserve Diff</th>
+                <th className="num">Expense Paid Diff</th>
+                <th className="num">Expense Reserve Diff</th>
                 <th>Facility Name</th>
-                <th>Ind Paid Diff </th>
-                <th>Ind Reserve Diff </th>
+                <th className="num">Ind Paid Diff </th>
+                <th className="num">Ind Reserve Diff </th>
               </tr>
             </thead>
             <tbody>
@@ -176,11 +176,11 @@ const LossRuns = () => {
                       <td>{claimant}</td>
                       <td>{dayjs(date1).format("MM/DD/YYYY")}</td>
                       <td>{dayjs(date2).format("MM/DD/YYYY")}</td>
-                      <td>{expensePaidDiff}</td>
-                      <td>{expenseReseverDiff}</td>
+                      <td className="num">{expensePaidDiff}</td>
+                      <td className="num">{expenseReseverDiff}</td>
                       <td>{facilityName}</td>
-                      <td>{indPaidDiff}</td>
-                      <td>{indReserveDiff}</td>
+                      <td className="num">{indPaidDiff}</td>
+                      <td className="num">{indReserveDiff}</td>
                     </tr>
                   );
                 })}

@@ -134,8 +134,8 @@ function EditTransactions() {
                 <thead>
                   <tr>
                     <th>GL code</th>
-                    <th>Transaction Id</th>
-                    <th>Amount</th>
+                    <th className="num">Transaction Id</th>
+                    <th className="num">Amount</th>
                     <th>Transaction date</th>
                     <th>Transaction type</th>
                     <th>Actions</th>
@@ -154,8 +154,8 @@ function EditTransactions() {
                     return (
                       <tr key={transactionId}>
                         <td>{glcode}</td>
-                        <td>{transactionId}</td>
-                        <td>{amount}</td>
+                        <td className="num">{transactionId}</td>
+                        <td className="num">{amount}</td>
                         <td>{dayjs(transactionDate).format("MM/DD/YYYY")}</td>
                         <td>{transactionType}</td>
                         <td>

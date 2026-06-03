@@ -140,7 +140,7 @@ function Reconcile() {
               <th>Transaction Type</th>
               <th>Sub Transaction Type</th>
               <th>GL Code</th>
-              <th>Amount</th>
+              <th className="num">Amount</th>
               <th>Action</th>
             </tr>
           </thead>
@@ -160,7 +160,7 @@ function Reconcile() {
                   <td>{transactionType}</td>
                   <td>{subtransactionType}</td>
                   <td>{glcode}</td>
-                  <td>{amount}</td>
+                  <td className="num">{amount}</td>
                   <td>
                     <Button
                       onClick={() => {

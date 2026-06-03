@@ -59,9 +59,16 @@ export default function SignIn() {
       setErrorMessage("");
     }
 
-    const res = await signIn({ id: email, password });
-    if (!res || !res?.token) {
-      setErrorMessage("Please try again after sometime");
+    let res;
+    try {
+      res = await signIn({ id: email, password });
+    } catch (error) {
+      setErrorMessage(error.message || "Login failed. Please try again.");
+      return;
+    }
+
+    if (!res?.token) {
+      setErrorMessage(res?.error || "Login failed. Please try again.");
       return;
     }
 

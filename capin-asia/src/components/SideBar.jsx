@@ -15,8 +15,11 @@ import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 // import AssessmentIcon from "@mui/icons-material/Assessment";
 import BatterySaverIcon from "@mui/icons-material/BatterySaver";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 
 import { useNavigate, useLocation } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { getUserRole } from "../pages/SignIn/authSlice";
 
 const drawerWidth = 240;
 
@@ -59,10 +62,25 @@ const pagesList = [
 export default function SideBar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const userRole = useSelector(getUserRole);
+  const canAccessAdminModule = new Set(["admin", "manager"]).has(
+    userRole?.toLowerCase()
+  );
 
   const handleNavigation = (path) => {
     navigate(path);
   };
+
+  const filteredPages = canAccessAdminModule
+    ? [
+        ...pagesList,
+        {
+          name: "Admin Module",
+          icon: <AdminPanelSettingsIcon />,
+          path: "/admin-module",
+        },
+      ]
+    : pagesList;
 
   return (
     <Box sx={{ display: "flex" }}>
@@ -81,7 +99,7 @@ export default function SideBar() {
         <Toolbar />
         <Box sx={{ overflow: "auto" }}>
           <List>
-            {pagesList.map((page) => {
+            {filteredPages.map((page) => {
               const isActiveTab = location.pathname.includes(page.path);
               return (
                 <ListItem

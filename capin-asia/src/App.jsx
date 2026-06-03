@@ -16,6 +16,9 @@ import "./App.css";
 import OpeningModule from "./pages/OpeningModule";
 import Insurance from "./pages/Insurance";
 import AccountingModule from "./pages/AccountingModule";
+import AdminModule from "./pages/AdminModule";
+import AdminUsers from "./pages/AdminModule/Users";
+import AdminClients from "./pages/AdminModule/Clients";
 
 const PrivateRoutes = () => {
   let userData = localStorage.getItem("authToken");
@@ -48,6 +51,10 @@ function App() {
               <Route path="/insurance" element={<Insurance />} />
               <Route path="/opening-module" element={<OpeningModule />} />
               <Route path="/accounting-module" element={<AccountingModule />} />
+              <Route path="/admin-module" element={<AdminModule />}>
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="clients" element={<AdminClients />} />
+              </Route>
             </Route>
             <Route path="/sign-in" element={<SignIn />} />
           </Routes>

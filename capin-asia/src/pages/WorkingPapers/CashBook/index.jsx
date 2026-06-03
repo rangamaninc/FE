@@ -127,10 +127,10 @@ export default function CashBook({ handleTabChange }) {
                 <thead>
                   <tr>
                     <th>Month</th>
-                    <th>Opening Balance</th>
-                    <th>Receipts Received</th>
-                    <th>Payments Payable</th>
-                    <th>Closing Balance</th>
+                    <th className="num">Opening Balance</th>
+                    <th className="num">Receipts Received</th>
+                    <th className="num">Payments Payable</th>
+                    <th className="num">Closing Balance</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -145,10 +145,10 @@ export default function CashBook({ handleTabChange }) {
                     return (
                       <tr key={month}>
                         <td>{month}</td>
-                        <td>{openingBalance}</td>
-                        <td>{receiptsReceived}</td>
-                        <td>{paymentsReceived}</td>
-                        <td>{closingBalance}</td>
+                        <td className="num">{openingBalance}</td>
+                        <td className="num">{receiptsReceived}</td>
+                        <td className="num">{paymentsReceived}</td>
+                        <td className="num">{closingBalance}</td>
                       </tr>
                     );
                   })}

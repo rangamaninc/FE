@@ -39,3 +39,5 @@ export const getUserFirstName = (state) => state.auth.userFirstName;
 export const getClients = (state) => state.auth.clients;
 
 export const getMappedUsers = (state) => state.auth.mappedUsers;
+
+export const getUserRole = (state) => state.auth.userRole;

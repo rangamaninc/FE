@@ -72,15 +72,15 @@ function Accurals() {
         <table>
           <tr>
             <th>GL Code</th>
-            <th>Accural Amount</th>
+            <th className="num">Accural Amount</th>
             <th>Period From</th>
             <th>Period To</th>
-            <th>Number of Days Paid</th>
-            <th>Number of Days Expensed</th>
-            <th>Current Expense of Year</th>
-            <th>Total expense </th>
-            <th>Payment During Year</th>
-            <th>Accural Closing Balance</th>
+            <th className="num">Number of Days Paid</th>
+            <th className="num">Number of Days Expensed</th>
+            <th className="num">Current Expense of Year</th>
+            <th className="num">Total expense </th>
+            <th className="num">Payment During Year</th>
+            <th className="num">Accural Closing Balance</th>
             <th>Previous Expense of Year</th>
           </tr>
           {records.map((record, index) => {
@@ -100,15 +100,15 @@ function Accurals() {
             return (
               <tr key={index}>
                 <td>{glCode}</td>
-                <td>{amount}</td>
+                <td className="num">{amount}</td>
                 <td>{dayjs(fromDate).format("MM/DD/YYYY")}</td>
                 <td>{dayjs(toDate).format("MM/DD/YYYY")}</td>
-                <td>{numberOfDaysPaid}</td>
-                <td>{numberOfDaysExpensed}</td>
-                <td>{currentExpenseofYear}</td>
-                <td>{expenseForYear}</td>
-                <td>{paymentDuringYear}</td>
-                <td>{closingBalanceasBL}</td>
+                <td className="num">{numberOfDaysPaid}</td>
+                <td className="num">{numberOfDaysExpensed}</td>
+                <td className="num">{currentExpenseofYear}</td>
+                <td className="num">{expenseForYear}</td>
+                <td className="num">{paymentDuringYear}</td>
+                <td className="num">{closingBalanceasBL}</td>
                 <td>{expenseMethodology}</td>
               </tr>
             );

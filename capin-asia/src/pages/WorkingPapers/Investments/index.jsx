@@ -127,11 +127,11 @@ const Investments = () => {
                 <thead>
                   <tr>
                     <th>GL code</th>
-                    <th>Investment Id</th>
+                    <th className="num">Investment Id</th>
                     <th>Investment Name</th>
-                    <th>Total Units</th>
-                    <th>As on value</th>
-                    <th>Cost value</th>
+                    <th className="num">Total Units</th>
+                    <th className="num">As on value</th>
+                    <th className="num">Cost value</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -147,11 +147,11 @@ const Investments = () => {
                     return (
                       <tr key={index}>
                         <td>{glcode}</td>
-                        <td>{investmentId}</td>
+                        <td className="num">{investmentId}</td>
                         <td>{investmentName}</td>
-                        <td>{totalUnits}</td>
-                        <td>{asOnValue}</td>
-                        <td>{costValue}</td>
+                        <td className="num">{totalUnits}</td>
+                        <td className="num">{asOnValue}</td>
+                        <td className="num">{costValue}</td>
                       </tr>
                     );
                   })}

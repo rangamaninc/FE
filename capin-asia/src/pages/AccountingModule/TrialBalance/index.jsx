@@ -57,7 +57,7 @@ export default function TrialBalance() {
                   <tr>
                     <th>GL code</th>
                     <th>GL description</th>
-                    <th>Balance</th>
+                    <th className="num">Balance</th>
                     <th>Credit/Debit</th>
                   </tr>
                 </thead>
@@ -68,7 +68,7 @@ export default function TrialBalance() {
                       <tr key={index}>
                         <td>{glcode}</td>
                         <td>{clientGLCodesMap[glcode]}</td>
-                        <td>{balance}</td>
+                        <td className="num">{balance}</td>
                         <td>{type}</td>
                       </tr>
                     );
