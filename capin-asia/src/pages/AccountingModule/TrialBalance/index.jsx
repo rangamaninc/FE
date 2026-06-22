@@ -4,11 +4,13 @@ import { useSelector } from "react-redux";
 import Box from "@mui/material/Box";
 
 import Loader from "../../../components/Loader";
+import { AppTable } from "../../../components/ui";
 import {
   getSelectedClient,
   getSelectedClientGLCodesMap,
 } from "../../../redux/globalSlice";
 import { getTrialBalanceData } from "../../../api/accountingModule";
+import { downloadExcelFromRows } from "../../../utils/exportTableData";
 
 export default function TrialBalance() {
   const selectedClient = useSelector(getSelectedClient);
@@ -21,6 +23,7 @@ export default function TrialBalance() {
       setShowLoader(false);
       return;
     }
+    setShowLoader(true);
     try {
       const res = await getTrialBalanceData(selectedClient.id);
       setTrialBalanceData(res.data || []);
@@ -30,6 +33,22 @@ export default function TrialBalance() {
       setShowLoader(false);
     }
   }, [selectedClient?.id]);
+
+  const handleExcelDownload = useCallback(() => {
+    downloadExcelFromRows({
+      rows: trialBalanceData,
+      columns: [
+        { header: "GL code", accessor: "glcode" },
+        {
+          header: "GL description",
+          accessor: (row) => clientGLCodesMap[row.glcode] ?? "",
+        },
+        { header: "Balance", accessor: "balance" },
+        { header: "Credit/Debit", accessor: "type" },
+      ],
+      fileName: "trial-balance",
+    });
+  }, [trialBalanceData, clientGLCodesMap]);
 
   useEffect(() => {
     fetchTrialBalanceData();
@@ -50,33 +69,33 @@ export default function TrialBalance() {
         </div>
       ) : (
         <Box sx={{ marginTop: 3, marginBottom: 3, width: "95%" }}>
-          {trialBalanceData.length > 0 && (
-            <>
-              <table>
-                <thead>
-                  <tr>
-                    <th>GL code</th>
-                    <th>GL description</th>
-                    <th className="num">Balance</th>
-                    <th>Credit/Debit</th>
+          <AppTable
+            onRefresh={fetchTrialBalanceData}
+            isRefreshing={showLoader}
+            onExcelDownload={handleExcelDownload}
+          >
+            <thead>
+              <tr>
+                <th>GL code</th>
+                <th>GL description</th>
+                <th className="num">Balance</th>
+                <th>Credit/Debit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {trialBalanceData.map((balanceObj, index) => {
+                const { glcode, balance, type } = balanceObj;
+                return (
+                  <tr key={index}>
+                    <td>{glcode}</td>
+                    <td>{clientGLCodesMap[glcode]}</td>
+                    <td className="num">{balance}</td>
+                    <td>{type}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {trialBalanceData.map((balanceObj, index) => {
-                    const { glcode, balance, type } = balanceObj;
-                    return (
-                      <tr key={index}>
-                        <td>{glcode}</td>
-                        <td>{clientGLCodesMap[glcode]}</td>
-                        <td className="num">{balance}</td>
-                        <td>{type}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </>
-          )}
+                );
+              })}
+            </tbody>
+          </AppTable>
         </Box>
       )}
     </div>

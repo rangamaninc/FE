@@ -1,121 +1,128 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
-import { Button } from "@mui/material";
-import dayjs from "dayjs";
-
-import Grid from "@mui/material/Grid";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
+import { Plus } from "lucide-react";
 
 import AddNewAccuralModal from "./AddNewAccuralModal";
 import { addNewAccuralEntry, getAccurals } from "../../../api/accurals";
 import { getSelectedClient } from "../../../redux/globalSlice";
 import { MONTHS } from "../constants";
+import WorkingPapersPageLayout from "../WorkingPapersPageLayout";
+import MonthSelect from "../MonthSelect";
+import { Button, DataTable, useToast } from "../../../components/ui";
+import {
+  amountColumn,
+  dateColumn,
+} from "../workingPapersUtils";
 
 function Accurals() {
   const selectedClient = useSelector(getSelectedClient);
+  const { toast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[0]);
 
-  useEffect(() => {
-    async function fetchData() {
+  const fetchData = useCallback(async () => {
+    if (!selectedClient?.id) {
+      setRecords([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
       const res = await getAccurals(selectedClient.id, selectedMonth);
       if (res.success) {
         setRecords(res.accruedData);
+      } else {
+        setRecords([]);
       }
+    } catch {
+      setRecords([]);
+    } finally {
+      setLoading(false);
     }
-    fetchData();
   }, [selectedClient, selectedMonth]);
 
-  const handleSave = async (data) => {
-    await addNewAccuralEntry(selectedClient.id, data);
-    setShowModal(false);
-  };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const handleMonthChange = (e) => {
-    setSelectedMonth(e.target.value);
+  const columns = useMemo(
+    () => [
+      { accessorKey: "glCode", header: "GL Code" },
+      amountColumn("amount", "Accural Amount"),
+      dateColumn("fromDate", "Period From"),
+      dateColumn("toDate", "Period To"),
+      amountColumn("numberOfDaysPaid", "Number of Days Paid"),
+      amountColumn("numberOfDaysExpensed", "Number of Days Expensed"),
+      amountColumn("currentExpenseofYear", "Current Expense of Year"),
+      amountColumn("expenseForYear", "Total expense"),
+      amountColumn("paymentDuringYear", "Payment During Year"),
+      amountColumn("closingBalanceasBL", "Accural Closing Balance"),
+      { accessorKey: "expenseMethodology", header: "Previous Expense of Year" },
+    ],
+    []
+  );
+
+  const handleSave = async (data) => {
+    try {
+      await addNewAccuralEntry(selectedClient.id, data);
+      setShowModal(false);
+      toast({ title: "Accrual entry added" });
+      fetchData();
+    } catch {
+      toast({
+        title: "Failed to add accrual entry",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
-    <div>
+    <>
       <AddNewAccuralModal
         showModal={showModal}
         handleSave={handleSave}
         handleClose={() => setShowModal(false)}
       />
-      <Grid container spacing={3}>
-        <Grid item xs={3} sx={{ display: "flex", alignItems: "center" }}>
-          {" "}
-          <Button variant="contained" onClick={() => setShowModal(true)}>
-            Add new entry
-          </Button>
-        </Grid>
-        <Grid item xs={3}>
-          <Select
-            value={selectedMonth}
-            displayEmpty
-            inputProps={{ "aria-label": "Without label" }}
-            onChange={handleMonthChange}
+
+      <WorkingPapersPageLayout
+        title="Accurals"
+        subtitle={`Accrual entries for ${selectedMonth}.`}
+        loading={loading}
+        loadingLabel="Loading accruals..."
+        action={
+          <Button
+            type="button"
+            className="w-fit shrink-0 self-end sm:self-auto"
+            onClick={() => setShowModal(true)}
           >
-            {MONTHS.map((month) => {
-              return (
-                <MenuItem key={month} value={month} defaultChecked>
-                  {month}
-                </MenuItem>
-              );
-            })}
-          </Select>
-        </Grid>
-      </Grid>
-      <div style={{ marginTop: 10 }}>
-        <table>
-          <tr>
-            <th>GL Code</th>
-            <th className="num">Accural Amount</th>
-            <th>Period From</th>
-            <th>Period To</th>
-            <th className="num">Number of Days Paid</th>
-            <th className="num">Number of Days Expensed</th>
-            <th className="num">Current Expense of Year</th>
-            <th className="num">Total expense </th>
-            <th className="num">Payment During Year</th>
-            <th className="num">Accural Closing Balance</th>
-            <th>Previous Expense of Year</th>
-          </tr>
-          {records.map((record, index) => {
-            const {
-              glCode,
-              amount,
-              fromDate,
-              toDate,
-              closingBalanceasBL,
-              currentExpenseofYear,
-              expenseMethodology,
-              expenseForYear,
-              numberOfDaysExpensed,
-              numberOfDaysPaid,
-              paymentDuringYear,
-            } = record;
-            return (
-              <tr key={index}>
-                <td>{glCode}</td>
-                <td className="num">{amount}</td>
-                <td>{dayjs(fromDate).format("MM/DD/YYYY")}</td>
-                <td>{dayjs(toDate).format("MM/DD/YYYY")}</td>
-                <td className="num">{numberOfDaysPaid}</td>
-                <td className="num">{numberOfDaysExpensed}</td>
-                <td className="num">{currentExpenseofYear}</td>
-                <td className="num">{expenseForYear}</td>
-                <td className="num">{paymentDuringYear}</td>
-                <td className="num">{closingBalanceasBL}</td>
-                <td>{expenseMethodology}</td>
-              </tr>
-            );
-          })}
-        </table>
-      </div>
-    </div>
+            <Plus className="h-4 w-4" />
+            Add Entry
+          </Button>
+        }
+        filters={
+          <MonthSelect
+            value={selectedMonth}
+            onChange={setSelectedMonth}
+          />
+        }
+      >
+        <DataTable
+          className="flex-1"
+          columns={columns}
+          data={records}
+          pageSize={10}
+          onRefresh={fetchData}
+          isRefreshing={loading}
+          excelFileName="accurals"
+          showRowActions={false}
+          emptyTitle="No accrual records"
+          emptyDescription="Add an entry or choose a different month."
+        />
+      </WorkingPapersPageLayout>
+    </>
   );
 }
 

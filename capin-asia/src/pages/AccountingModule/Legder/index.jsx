@@ -13,7 +13,9 @@ import {
   setClientGLCodesMap,
 } from "../../../redux/globalSlice";
 import Loader from "../../../components/Loader";
+import { AppTable } from "../../../components/ui";
 import { getLedgerData } from "../../../api/accountingModule";
+import { downloadExcelFromRows } from "../../../utils/exportTableData";
 import { getGLCodesByClientId } from "../../../api/user";
 import { Typography } from "@mui/material";
 import { useDispatch } from "react-redux";
@@ -87,6 +89,28 @@ export default function Ledger() {
     }
   }, [selectedClient?.id, selectedCashBook]);
 
+  const handleRefresh = useCallback(async () => {
+    setShowLoader(true);
+    await fetchTransactions();
+  }, [fetchTransactions]);
+
+  const handleExcelDownload = useCallback(() => {
+    downloadExcelFromRows({
+      rows: txnsData,
+      columns: [
+        {
+          header: "Transaction date",
+          accessor: (row) => dayjs(row.transaction_date).format("MM/DD/YYYY"),
+        },
+        { header: "Transaction type", accessor: "type" },
+        { header: "Transaction Id", accessor: "transactionid" },
+        { header: "Amount", accessor: "amount" },
+        { header: "Description", accessor: "description" },
+      ],
+      fileName: "ledger",
+    });
+  }, [txnsData]);
+
   useEffect(() => {
     if (selectedCashBook) {
       setShowLoader(true);
@@ -144,43 +168,41 @@ export default function Ledger() {
         </div>
       ) : (
         <Box sx={{ margin: 5, width: "75%" }}>
-          {txnsData.length > 0 && (
-            <>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Transaction date</th>
-                    <th>Transaction type</th>
-                    <th className="num">Transaction Id</th>
-                    {/* <th>GLCode</th> */}
-                    <th className="num">Amount</th>
-                    <th>Description</th>
+          <AppTable
+            onRefresh={handleRefresh}
+            isRefreshing={showLoader}
+            onExcelDownload={handleExcelDownload}
+          >
+            <thead>
+              <tr>
+                <th>Transaction date</th>
+                <th>Transaction type</th>
+                <th className="num">Transaction Id</th>
+                <th className="num">Amount</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {txnsData.map((balanceObj) => {
+                const {
+                  transactionid,
+                  amount,
+                  transaction_date: transactionDate,
+                  description,
+                  type,
+                } = balanceObj;
+                return (
+                  <tr key={transactionid}>
+                    <td>{dayjs(transactionDate).format("MM/DD/YYYY")}</td>
+                    <td>{type}</td>
+                    <td className="num">{transactionid}</td>
+                    <td className="num">{amount}</td>
+                    <td>{description}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {txnsData.map((balanceObj) => {
-                    const {
-                      transactionid,
-                      amount,
-                      transaction_date: transactionDate,
-                      description,
-                      type,glcode
-                    } = balanceObj;
-                    return (
-                      <tr key={transactionid}>
-                        <td>{dayjs(transactionDate).format("MM/DD/YYYY")}</td>
-                        <td>{type}</td>
-                        <td className="num">{transactionid}</td>
-                        {/* <td>{glcode}</td> */}
-                        <td className="num">{amount}</td>
-                        <td>{description}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </>
-          )}
+                );
+              })}
+            </tbody>
+          </AppTable>
         </Box>
       )}
     </div>

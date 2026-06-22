@@ -87,7 +87,7 @@ export default function NavBar() {
 
   const handleLogout = () => {
     localStorage.removeItem("authToken");
-    navigate("/sign-in");
+    navigate("/");
   };
 
   const menuId = "primary-search-account-menu";
@@ -158,7 +158,7 @@ export default function NavBar() {
             aria-label="open drawer"
             sx={{ mr: 2 }}
             onClick={() => {
-              navigate("/");
+              navigate("/home");
             }}
           >
             <LogoDevIcon />
@@ -169,7 +169,7 @@ export default function NavBar() {
             component="div"
             sx={{ display: { xs: "none", sm: "block", cursor: "pointer" } }}
             onClick={() => {
-              navigate("/");
+              navigate("/home");
             }}
           >
             CapinAsia

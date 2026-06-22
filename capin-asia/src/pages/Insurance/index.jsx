@@ -1,174 +1,99 @@
-import React from "react";
-
-import { Button, Typography } from "@mui/material";
-import Select from "react-select";
+import { useState } from "react";
 import { useSelector } from "react-redux";
 
-import Grid from "@mui/material/Grid";
-import TextField from "@mui/material/TextField";
-import { DemoContainer } from "@mui/x-date-pickers/internals/demo";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import dayjs from "dayjs";
-import Snackbar from "@mui/material/Snackbar";
-
-import { INSURANCE_FORM_TYPES, INSURANCE_FORM_FIELDS } from "./consts";
 import { addNewInsurancePolicy } from "../../api/insurance";
 import { getSelectedClient } from "../../redux/globalSlice";
-import "./Insurance.css";
-
-const customStyles = {
-  input: (provided) => ({
-    ...provided,
-    width: 100,
-    height: 44,
-    display: "flex",
-    alignItems: "center",
-  }),
-  singleValue: (provided) => ({
-    ...provided,
-    marginTop: 2,
-  }),
-  menu: (base) => ({
-    ...base,
-    zIndex: 100,
-  }),
-};
+import InsuranceForm from "./InsuranceForm";
+import {
+  Card,
+  CardContent,
+  EmptyState,
+  useToast,
+} from "../../components/ui";
 
 function Insurance() {
-  const [showSnackbar, setShowSnackbar] = React.useState(false);
-  const [snackbarText, setSnackbarText] = React.useState("");
-  const [currentFormType, setCurrentFormType] = React.useState("direct");
-  const [formData, setFormData] = React.useState({});
-
+  const { toast } = useToast();
   const selectedClient = useSelector(getSelectedClient);
+  const clientId = selectedClient?.id;
+  const clientName = selectedClient?.name;
+
+  const [currentFormType, setCurrentFormType] = useState("direct");
+  const [formData, setFormData] = useState({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  const subtitle = clientName
+    ? `Add insurance policies for ${clientName}.`
+    : "Add insurance policies for the selected client.";
+
+  const handleFormTypeChange = (value) => {
+    setCurrentFormType(value);
+    setFormData({});
+  };
 
   const handleSave = async () => {
-    const res = await addNewInsurancePolicy(selectedClient.id, {
-      ...formData,
-      type: currentFormType,
-    });
-    setShowSnackbar(true);
-    if (res.success) {
-      setSnackbarText("Opening Balance added");
-      setTimeout(() => {
-        window.location.reload(false);
-      }, 200);
-    } else {
-      setSnackbarText("Same policy number exists");
+    if (!clientId) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const res = await addNewInsurancePolicy(clientId, {
+        ...formData,
+        type: currentFormType,
+      });
+
+      if (res.success) {
+        toast({
+          title: "Insurance policy added",
+          description: "The policy was saved successfully.",
+          variant: "success",
+        });
+        setFormData({});
+      } else {
+        toast({
+          title: "Could not save policy",
+          description: "A policy with this number already exists.",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "Save failed",
+        description: "Failed to save insurance policy. Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
-    <div className="m-4">
-      <Typography variant="h6" component="h6">
-        Insurance Form
-      </Typography>
-      <div style={{ marginTop: 20, marginBottom: 20 }}>
-        <Grid container spacing={2} rowSpacing={3}>
-          <Grid item xs={6}>
-            <Select
-              className="basic-single"
-              classNamePrefix="select"
-              isClearable={true}
-              isSearchable={true}
-              name="color"
-              defaultValue={INSURANCE_FORM_TYPES[0]}
-              styles={customStyles}
-              options={INSURANCE_FORM_TYPES}
-              onChange={(e) => setCurrentFormType(e.value)}
-              placeholder="Select Insurance Type"
+    <div className="flex min-h-[calc(100vh-12rem)] flex-col space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Insurance</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+      </div>
+
+      <Card className="flex flex-1 flex-col">
+        <CardContent className="flex flex-1 flex-col pt-6">
+          {!clientId ? (
+            <EmptyState
+              title="No client selected"
+              description="Choose a client from the main header to add insurance policies."
             />
-          </Grid>
-          {INSURANCE_FORM_FIELDS[currentFormType].map((formFieldObj, index) => {
-            const { name, type, label, datatype } = formFieldObj;
-            if (type === "TextField") {
-              return (
-                <Grid
-                  key={index}
-                  item
-                  className={
-                    name === "contactPhone" && currentFormType != "direct" // to handle the padding issue for date picker field
-                      ? "text-field-custom-padding"
-                      : ""
-                  }
-                  xs={6}
-                >
-                  <TextField
-                    name={name}
-                    required
-                    fullWidth
-                    id={name}
-                    label={label}
-                    type={datatype}
-                    onChange={(e) =>
-                      setFormData({ ...formData, [name]: e.target.value })
-                    }
-                  />
-                </Grid>
-              );
-            } else if (type === "Select") {
-              return (
-                <Grid key={index} item xs={6}>
-                  <Select
-                    className="basic-single"
-                    classNamePrefix="select"
-                    isClearable={true}
-                    isSearchable={true}
-                    name={name}
-                    styles={customStyles}
-                    options={formFieldObj.options}
-                    onChange={(e) =>
-                      setFormData({ ...formData, [name]: e.value })
-                    }
-                    placeholder="Earning Methodology"
-                  />
-                </Grid>
-              );
-            } else if (type === "DatePicker") {
-              return (
-                <Grid key={index} item xs={6}>
-                  <LocalizationProvider dateAdapter={AdapterDayjs}>
-                    <DemoContainer components={["DatePicker"]}>
-                      <DatePicker
-                        label={label}
-                        slotProps={{
-                          textField: {
-                            fullWidth: true,
-                            name,
-                          },
-                        }}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            [name]: dayjs(e.$d.toISOString()).format(
-                              "MM/DD/YYYY"
-                            ),
-                          })
-                        }
-                      />
-                    </DemoContainer>
-                  </LocalizationProvider>
-                </Grid>
-              );
-            }
-          })}
-        </Grid>
-      </div>
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <Button sx={{ width: 350 }} variant="contained" onClick={handleSave}>
-          Save
-        </Button>
-      </div>
-      <Snackbar
-        anchorOrigin={{ vertical: "top", horizontal: "right" }}
-        open={showSnackbar}
-        autoHideDuration={5000}
-        onClose={() => setShowSnackbar(false)}
-        message={snackbarText}
-        key={"snackbar-top-right"}
-      />
+          ) : (
+            <InsuranceForm
+              currentFormType={currentFormType}
+              onFormTypeChange={handleFormTypeChange}
+              formData={formData}
+              onFormDataChange={setFormData}
+              onSave={handleSave}
+              isSaving={isSaving}
+            />
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

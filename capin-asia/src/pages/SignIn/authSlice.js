@@ -22,8 +22,10 @@ export const authSlice = createSlice({
     userSignOut: (state) => {
       state.isAuthenticated = false;
       state.accessToken = null;
-      state.userFirstName = "";
       state.userEmail = "";
+      state.userRole = "";
+      state.clients = [];
+      state.mappedUsers = [];
     },
   },
 });

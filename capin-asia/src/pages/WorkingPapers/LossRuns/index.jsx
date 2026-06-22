@@ -1,49 +1,97 @@
-import { useEffect, useState } from "react";
-import { Button } from "@mui/material";
-import Select from "@mui/material/Select";
-import Grid from "@mui/material/Grid";
-import MenuItem from "@mui/material/MenuItem";
-import Snackbar from "@mui/material/Snackbar";
-import UploadFileModal from "./UploadFileModal";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
-import dayjs from "dayjs";
+import { Upload } from "lucide-react";
+
+import UploadFileModal from "./UploadFileModal";
 import { getLossRunsData, lossRunsUpload } from "../../../api/lossRuns";
 import { MONTHS } from "../constants";
 import { getSelectedClient } from "../../../redux/globalSlice";
-import Loader from "../../../components/Loader";
+import WorkingPapersPageLayout from "../WorkingPapersPageLayout";
+import {
+  Button,
+  DataTable,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  useToast,
+} from "../../../components/ui";
+import {
+  amountColumn,
+  dateColumn,
+} from "../workingPapersUtils";
 
 const LossRuns = () => {
   const selectedClient = useSelector(getSelectedClient);
+  const { toast } = useToast();
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showSnackBar, setShowSnackBar] = useState(false);
-  const [snackbarText, setSnackbarText] = useState("");
   const [fileValidation, setFileValidation] = useState([]);
   const [selectedFrequency, setSelectedFrequency] = useState("yearly");
   const [selectedFreqValue, setSelectedFrequencyValue] = useState(0);
   const [lossRunsDetails, setLossRunsDetails] = useState([]);
-  const [showLoader, setShowLoader] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
-  useEffect(() => {
-    async function fetchData() {
-      setShowLoader(true);
+  const frequencyLabel = useMemo(() => {
+    if (selectedFrequency === "quarterly") {
+      return `Q${selectedFreqValue + 1}`;
+    }
+    if (selectedFrequency === "monthly") {
+      return MONTHS[selectedFreqValue] ?? "";
+    }
+    return "Yearly";
+  }, [selectedFrequency, selectedFreqValue]);
+
+  const fetchData = useCallback(async () => {
+    if (!selectedClient?.id) {
+      setLossRunsDetails([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
       const res = await getLossRunsData(
         selectedClient.id,
         selectedFrequency,
         selectedFreqValue
       );
-      setShowLoader(false);
-      setLossRunsDetails(res.lossRunsDetails);
+      setLossRunsDetails(res.lossRunsDetails ?? []);
+    } catch {
+      setLossRunsDetails([]);
+    } finally {
+      setLoading(false);
     }
+  }, [selectedClient, selectedFreqValue, selectedFrequency]);
+
+  useEffect(() => {
     fetchData();
-  }, [selectedClient.id, selectedFreqValue, selectedFrequency]);
+  }, [fetchData]);
+
+  const columns = useMemo(
+    () => [
+      { accessorKey: "claimNumber", header: "Claim Number" },
+      { accessorKey: "claimant", header: "Claimant" },
+      dateColumn("date1", "Date 1"),
+      dateColumn("date2", "Date 2"),
+      amountColumn("expensePaidDiff", "Expense Paid Diff"),
+      amountColumn("expenseReseverDiff", "Expense Reserve Diff"),
+      { accessorKey: "facilityName", header: "Facility Name" },
+      amountColumn("indPaidDiff", "Ind Paid Diff"),
+      amountColumn("indReserveDiff", "Ind Reserve Diff"),
+    ],
+    []
+  );
 
   const handleSaveFile = async (formData) => {
     setErrorMsg("");
     const res = await lossRunsUpload(selectedClient.id, formData);
     if (res.success) {
       setShowUploadModal(false);
-      setSnackbarText("File uploaded successfully");
+      setFileValidation([]);
+      toast({ title: "File uploaded successfully" });
+      fetchData();
     } else if (res.errors) {
       setFileValidation(res.errors);
     } else if (res.error) {
@@ -51,66 +99,13 @@ const LossRuns = () => {
     }
   };
 
-  const renderCorrespondingValueDropdown = () => {
-    if (selectedFrequency === "quarterly") {
-      return (
-        <Select
-          value={selectedFreqValue}
-          displayEmpty
-          inputProps={{ "aria-label": "Without label" }}
-          onChange={(e) => setSelectedFrequencyValue(e.target.value)}
-        >
-          <MenuItem value={0}>Q1</MenuItem>
-          <MenuItem value={1}>Q2</MenuItem>
-          <MenuItem value={2}>Q3</MenuItem>
-          <MenuItem value={3}>Q4</MenuItem>
-        </Select>
-      );
-    } else if (selectedFrequency === "monthly") {
-      return (
-        <Select
-          value={selectedFreqValue}
-          displayEmpty
-          inputProps={{ "aria-label": "Without label" }}
-          onChange={(e) => setSelectedFrequencyValue(e.target.value)}
-        >
-          {MONTHS.map((month, index) => {
-            return (
-              <MenuItem key={month} value={index} defaultChecked>
-                {month}
-              </MenuItem>
-            );
-          })}
-        </Select>
-      );
-    }
+  const handleFrequencyChange = (value) => {
+    setSelectedFrequency(value);
+    setSelectedFrequencyValue(0);
   };
 
   return (
-    <div>
-      <Grid container spacing={3}>
-        <Grid item xs={2}>
-          <Select
-            value={selectedFrequency}
-            displayEmpty
-            inputProps={{ "aria-label": "Without label" }}
-            onChange={(e) => setSelectedFrequency(e.target.value)}
-          >
-            <MenuItem value={"yearly"}>Yearly</MenuItem>
-            <MenuItem value={"quarterly"}>Quarterly</MenuItem>
-            <MenuItem value={"monthly"}>Monthly</MenuItem>
-          </Select>
-        </Grid>
-        <Grid item xs={2}>
-          {selectedFrequency !== "yearly" && renderCorrespondingValueDropdown()}
-        </Grid>
-        <Grid item xs={4} />
-        <Grid item xs={2}>
-          <Button variant="contained" onClick={() => setShowUploadModal(true)}>
-            Upload new file
-          </Button>
-        </Grid>
-      </Grid>
+    <>
       <UploadFileModal
         showModal={showUploadModal}
         handleClose={() => {
@@ -121,74 +116,90 @@ const LossRuns = () => {
         fileValidation={fileValidation}
         errorMsg={errorMsg}
       />
-      <Snackbar
-        anchorOrigin={{ vertical: "top", horizontal: "right" }}
-        open={showSnackBar}
-        autoHideDuration={5000}
-        onClose={() => setShowSnackBar(false)}
-        message={snackbarText}
-        key={"snackbar-top-right"}
-      />
-      <div style={{ marginTop: 10 }}>
-        {showLoader ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "50vh",
-            }}
+
+      <WorkingPapersPageLayout
+        title="Loss Runs"
+        subtitle={`Loss run data — ${frequencyLabel}.`}
+        loading={loading}
+        loadingLabel="Loading loss runs..."
+        action={
+          <Button
+            type="button"
+            className="w-fit shrink-0 self-end sm:self-auto"
+            onClick={() => setShowUploadModal(true)}
           >
-            <Loader />
-          </div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Claim Number</th>
-                <th>Claimant</th>
-                <th>Date 1</th>
-                <th>Date 2</th>
-                <th className="num">Expense Paid Diff</th>
-                <th className="num">Expense Reserve Diff</th>
-                <th>Facility Name</th>
-                <th className="num">Ind Paid Diff </th>
-                <th className="num">Ind Reserve Diff </th>
-              </tr>
-            </thead>
-            <tbody>
-              {lossRunsDetails &&
-                lossRunsDetails.map((record, index) => {
-                  const {
-                    claimNumber,
-                    claimant,
-                    date1,
-                    date2,
-                    expensePaidDiff,
-                    expenseReseverDiff,
-                    facilityName,
-                    indPaidDiff,
-                    indReserveDiff,
-                  } = record;
-                  return (
-                    <tr key={index}>
-                      <td>{claimNumber}</td>
-                      <td>{claimant}</td>
-                      <td>{dayjs(date1).format("MM/DD/YYYY")}</td>
-                      <td>{dayjs(date2).format("MM/DD/YYYY")}</td>
-                      <td className="num">{expensePaidDiff}</td>
-                      <td className="num">{expenseReseverDiff}</td>
-                      <td>{facilityName}</td>
-                      <td className="num">{indPaidDiff}</td>
-                      <td className="num">{indReserveDiff}</td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
+            <Upload className="h-4 w-4" />
+            Upload File
+          </Button>
+        }
+        filters={
+          <>
+            <Select value={selectedFrequency} onValueChange={handleFrequencyChange}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Frequency" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="yearly">Yearly</SelectItem>
+                <SelectItem value="quarterly">Quarterly</SelectItem>
+                <SelectItem value="monthly">Monthly</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {selectedFrequency === "quarterly" ? (
+              <Select
+                value={String(selectedFreqValue)}
+                onValueChange={(value) =>
+                  setSelectedFrequencyValue(Number(value))
+                }
+              >
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Quarter" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Q1</SelectItem>
+                  <SelectItem value="1">Q2</SelectItem>
+                  <SelectItem value="2">Q3</SelectItem>
+                  <SelectItem value="3">Q4</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : null}
+
+            {selectedFrequency === "monthly" ? (
+              <Select
+                value={String(selectedFreqValue)}
+                onValueChange={(value) =>
+                  setSelectedFrequencyValue(Number(value))
+                }
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTHS.map((month, index) => (
+                    <SelectItem key={month} value={String(index)}>
+                      {month}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+          </>
+        }
+      >
+        <DataTable
+          className="flex-1"
+          columns={columns}
+          data={lossRunsDetails}
+          pageSize={10}
+          onRefresh={fetchData}
+          isRefreshing={loading}
+          excelFileName="loss-runs"
+          showRowActions={false}
+          emptyTitle="No loss run records"
+          emptyDescription="Upload a file or adjust the frequency filter."
+        />
+      </WorkingPapersPageLayout>
+    </>
   );
 };
 

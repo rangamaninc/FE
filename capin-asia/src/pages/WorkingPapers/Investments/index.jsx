@@ -1,48 +1,64 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 
-import Box from "@mui/material/Box";
-import Grid from "@mui/material/Grid";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
-import Button from "@mui/material/Button";
-import Snackbar from "@mui/material/Snackbar";
-import Loader from "../../../components/Loader";
 import { getSelectedClient } from "../../../redux/globalSlice";
 import {
   getAllInvestments,
   getInvestmentDetails,
   updateInvestmentDetails,
 } from "../../../api/investment";
-import { MONTHS } from "../constants";
 import InvestmentUpdateModal from "./InvestmentUpdateModal";
+import WorkingPapersPageLayout from "../WorkingPapersPageLayout";
+import MonthSelect from "../MonthSelect";
+import { MONTHS } from "../constants";
+import { Button, DataTable, useToast } from "../../../components/ui";
+import { amountColumn } from "../workingPapersUtils";
 
 const Investments = () => {
   const selectedClient = useSelector(getSelectedClient);
+  const { toast } = useToast();
   const [investments, setInvestments] = useState([]);
-  const [showLoader, setShowLoader] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[0]);
   const [showInvestmentUpdateModal, setInvestmentUpdateModal] = useState(false);
   const [investmentDetails, setInvestmentDetails] = useState({});
-  const [showSnackbar, setShowSnackbar] = useState(false);
-  const [snackbarMsg, setSnackbarMsg] = useState("");
 
   const fetchInvestmentsData = useCallback(async () => {
-    const investmentsData = await getAllInvestments(
-      selectedClient.id,
-      selectedMonth
-    );
-    setInvestments(investmentsData.investments);
-    setShowLoader(false);
+    if (!selectedClient?.id) {
+      setInvestments([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const investmentsData = await getAllInvestments(
+        selectedClient.id,
+        selectedMonth
+      );
+      setInvestments(investmentsData.investments ?? []);
+    } catch {
+      setInvestments([]);
+    } finally {
+      setLoading(false);
+    }
   }, [selectedClient, selectedMonth]);
 
   useEffect(() => {
     fetchInvestmentsData();
   }, [fetchInvestmentsData]);
 
-  const handleMonthChange = (e) => {
-    setSelectedMonth(e.target.value);
-  };
+  const columns = useMemo(
+    () => [
+      { accessorKey: "glcode", header: "GL code" },
+      { accessorKey: "investmentId", header: "Investment Id" },
+      { accessorKey: "investmentName", header: "Investment Name" },
+      amountColumn("totalUnits", "Total Units"),
+      amountColumn("asOnValue", "As on value"),
+      amountColumn("costValue", "Cost value"),
+    ],
+    []
+  );
 
   const fetchInvestmentDetails = useCallback(async () => {
     const data = await getInvestmentDetails(selectedClient.id);
@@ -53,52 +69,37 @@ const Investments = () => {
     const res = await updateInvestmentDetails(selectedClient.id, {
       investmentData: data,
     });
-    setShowSnackbar(true);
     setInvestmentUpdateModal(false);
+
     if (res.success) {
-      setSnackbarMsg("Investment updated successfully");
+      toast({ title: "Investment updated successfully" });
+      fetchInvestmentsData();
     } else {
-      setSnackbarMsg("Something went wrong! please try again after sometime");
+      toast({
+        title: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
   return (
-    <div>
-      <Snackbar
-        anchorOrigin={{ vertical: "top", horizontal: "right" }}
-        open={showSnackbar}
-        autoHideDuration={3000}
-        onClose={() => setShowSnackbar(false)}
-        message={snackbarMsg}
-        key={"snackbar-top-right"}
-      />
+    <>
       <InvestmentUpdateModal
         showModal={showInvestmentUpdateModal}
         handleClose={() => setInvestmentUpdateModal(false)}
         investmentDetails={investmentDetails}
         handleUpdateInvestment={handleUpdateInvestment}
       />
-      <Grid container>
-        <Grid item xs={3}>
-          <Select
-            value={selectedMonth}
-            displayEmpty
-            inputProps={{ "aria-label": "Without label" }}
-            onChange={handleMonthChange}
-          >
-            {MONTHS.map((month) => {
-              return (
-                <MenuItem key={month} value={month} defaultChecked>
-                  {month}
-                </MenuItem>
-              );
-            })}
-          </Select>
-        </Grid>
-        <Grid item xs={6} />
-        <Grid item xs={3}>
+
+      <WorkingPapersPageLayout
+        title="Investments"
+        subtitle={`Investment balances for ${selectedMonth}.`}
+        loading={loading}
+        loadingLabel="Loading investments..."
+        action={
           <Button
-            variant="contained"
+            type="button"
+            className="w-fit shrink-0 self-end sm:self-auto"
             onClick={() => {
               setInvestmentUpdateModal(true);
               fetchInvestmentDetails();
@@ -106,62 +107,28 @@ const Investments = () => {
           >
             Update investment
           </Button>
-        </Grid>
-      </Grid>
-      {showLoader ? (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "50vh",
-          }}
-        >
-          <Loader />
-        </div>
-      ) : (
-        <Box sx={{ marginTop: 3, marginBottom: 3, width: "95%" }}>
-          {investments.length > 0 && (
-            <>
-              <table>
-                <thead>
-                  <tr>
-                    <th>GL code</th>
-                    <th className="num">Investment Id</th>
-                    <th>Investment Name</th>
-                    <th className="num">Total Units</th>
-                    <th className="num">As on value</th>
-                    <th className="num">Cost value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {investments.map((balanceObj, index) => {
-                    const {
-                      glcode,
-                      investmentId,
-                      investmentName,
-                      totalUnits,
-                      asOnValue,
-                      costValue,
-                    } = balanceObj;
-                    return (
-                      <tr key={index}>
-                        <td>{glcode}</td>
-                        <td className="num">{investmentId}</td>
-                        <td>{investmentName}</td>
-                        <td className="num">{totalUnits}</td>
-                        <td className="num">{asOnValue}</td>
-                        <td className="num">{costValue}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </>
-          )}
-        </Box>
-      )}
-    </div>
+        }
+        filters={
+          <MonthSelect
+            value={selectedMonth}
+            onChange={setSelectedMonth}
+          />
+        }
+      >
+        <DataTable
+          className="flex-1"
+          columns={columns}
+          data={investments}
+          pageSize={10}
+          onRefresh={fetchInvestmentsData}
+          isRefreshing={loading}
+          excelFileName="investments"
+          showRowActions={false}
+          emptyTitle="No investments found"
+          emptyDescription="Update investment details or choose a different month."
+        />
+      </WorkingPapersPageLayout>
+    </>
   );
 };
 

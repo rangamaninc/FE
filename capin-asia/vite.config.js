@@ -1,14 +1,31 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { resolve } from "path";
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      src: resolve(__dirname, "src"),
+      "@": resolve(__dirname, "src"),
+    },
+  },
+  optimizeDeps: {
+    include: [
+      "@mui/material",
+      "@mui/material/styles",
+      "@mui/icons-material",
+      "@mui/x-data-grid",
+      "@mui/x-date-pickers",
+      "@emotion/react",
+      "@emotion/styled",
+    ],
+  },
   server: {
     watch: {
-      usePolling: true, // Forces file scanning inside Docker containers
+      usePolling: true,
     },
-    host: true, // Needed to expose the port out of Docker
+    host: true,
     port: 5173,
   },
-})
+});

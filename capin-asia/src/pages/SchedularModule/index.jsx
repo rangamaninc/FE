@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { Plus } from "lucide-react";
 
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
@@ -15,7 +16,6 @@ import MenuItem from "@mui/material/MenuItem";
 import FormControl from "@mui/material/FormControl";
 import Select from "@mui/material/Select";
 import InputLabel from "@mui/material/InputLabel";
-import Snackbar from "@mui/material/Snackbar";
 import dayjs from "dayjs";
 
 import TaskList from "./TasksList";
@@ -23,6 +23,12 @@ import { AddNewTask, getAllTasks, updateTask } from "../../api/tasks";
 import { getClients, getMappedUsers } from "../SignIn/authSlice";
 import { getAllTasksForClient, setTasks } from "./tasksSlice";
 import EditTaskModal from "./EditTaskModal";
+import {
+  Button as UiButton,
+  Card,
+  CardContent,
+  useToast,
+} from "../../components/ui";
 
 const style = {
   position: "absolute",
@@ -41,11 +47,14 @@ function SchedularModule() {
   const clients = useSelector(getClients);
   const mappedUsers = useSelector(getMappedUsers);
   const tasksList = useSelector(getAllTasksForClient);
+  const { toast } = useToast();
+
   const [showNewTaskModal, setShowNewTaskModal] = React.useState(false);
   const [showEditTaskModal, setShowEditTaskModal] = React.useState(false);
   const [selectedTask, setSelectedTask] = React.useState({});
-  const [showSnackbar, setShowSnackbar] = React.useState(false);
-  const [snackBarMsg, setSnackBarMsg] = React.useState("");
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [isCreating, setIsCreating] = React.useState(false);
   const [selectedClientId, setSelectedClientId] = React.useState(
     clients.length > 0 ? clients[0].id : ""
   );
@@ -58,19 +67,47 @@ function SchedularModule() {
   const [endDate, setEndDate] = React.useState(null);
 
   const getTaskList = React.useCallback(async () => {
-    const res = await getAllTasks(selectedClientId);
-    dispatch(setTasks(res?.tasks || []));
-  }, [selectedClientId, dispatch]);
+    if (!selectedClientId) {
+      dispatch(setTasks([]));
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await getAllTasks(selectedClientId);
+      dispatch(setTasks(res?.tasks || []));
+    } catch (err) {
+      toast({
+        title: "Failed to load tasks",
+        description:
+          err?.response?.data?.error || "Unable to fetch tasks for this client.",
+        variant: "destructive",
+      });
+      dispatch(setTasks([]));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedClientId, dispatch, toast]);
 
   React.useEffect(() => {
     getTaskList();
   }, [getTaskList]);
 
+  const resetCreateForm = () => {
+    setSelectedAssignee(mappedUsers.length > 0 ? mappedUsers[0] : "");
+    setSelectedTaskType("");
+    setSelectedFile(null);
+    setStartDate(null);
+    setEndDate(null);
+    if (clients.length > 0) {
+      setSelectedClientId(clients[0].id);
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    var reqData = {};
-    data.forEach((value, key) => (reqData[key] = value));
     data.append("assignedTo", selectedAssignee);
     data.append("type", selectedTaskType);
     data.append("clientId", selectedClientId);
@@ -84,26 +121,63 @@ function SchedularModule() {
       data.append("file", selectedFile);
     }
 
-    const res = await AddNewTask(data);
-    if (res.success) {
-      setShowSnackbar(true);
-      setShowNewTaskModal(false);
-      setSnackBarMsg("Task created successfully");
-      setTimeout(() => {
-        getTaskList();
-      }, 1000);
+    setIsCreating(true);
+    try {
+      const res = await AddNewTask(data);
+      if (res.success) {
+        toast({
+          title: "Task created",
+          description: "The task was created successfully.",
+          variant: "success",
+        });
+        setShowNewTaskModal(false);
+        resetCreateForm();
+        await getTaskList();
+      } else {
+        toast({
+          title: "Create failed",
+          description: res.error || "Unable to create task.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Create failed",
+        description: err?.response?.data?.error || "Unable to create task.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const handleTaskUpdate = async (updatedTaskData) => {
-    const res = await updateTask(selectedTask.id, updatedTaskData);
-    if (res.success) {
-      setShowSnackbar(true);
-      setShowEditTaskModal(false);
-      setSnackBarMsg("Task updated successfully");
-      setTimeout(() => {
-        getTaskList();
-      }, 1000);
+    setIsSaving(true);
+    try {
+      const res = await updateTask(selectedTask.id, updatedTaskData);
+      if (res.success) {
+        toast({
+          title: "Task updated",
+          description: "The task was updated successfully.",
+          variant: "success",
+        });
+        setShowEditTaskModal(false);
+        await getTaskList();
+      } else {
+        toast({
+          title: "Update failed",
+          description: res.error || "Unable to update task.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Update failed",
+        description: err?.response?.data?.error || "Unable to update task.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -124,15 +198,43 @@ function SchedularModule() {
   };
 
   return (
-    <div className="w-100 p-4">
-      <div className="d-flex justify-content-start">
-        <Button variant="contained" onClick={() => setShowNewTaskModal(true)}>
+    <div className="flex min-h-[calc(100vh-12rem)] flex-col space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Scheduler</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage tasks and assignments for your clients.
+          </p>
+        </div>
+        <UiButton
+          type="button"
+          className="w-fit shrink-0 self-end sm:self-auto"
+          onClick={() => setShowNewTaskModal(true)}
+        >
+          <Plus className="h-4 w-4" />
           Create new task
-        </Button>
+        </UiButton>
       </div>
+
+      <Card className="flex flex-1 flex-col">
+        <CardContent className="flex flex-1 flex-col pt-6">
+          <TaskList
+            className="flex-1"
+            tasksList={tasksList}
+            isLoading={isLoading}
+            isRefreshing={isLoading}
+            onRefresh={getTaskList}
+            setShowEditTaskModal={(task) => {
+              setSelectedTask(task);
+              setShowEditTaskModal(true);
+            }}
+          />
+        </CardContent>
+      </Card>
+
       <Modal
         open={showNewTaskModal}
-        onClose={() => setShowNewTaskModal(false)}
+        onClose={() => !isCreating && setShowNewTaskModal(false)}
         aria-labelledby="modal-modal-title"
         aria-describedby="modal-modal-description"
       >
@@ -167,76 +269,60 @@ function SchedularModule() {
                 />
               </Grid>
               <Grid item xs={6}>
-                <Box>
-                  <FormControl fullWidth>
-                    <InputLabel id="demo-simple-select-label">
-                      Client
-                    </InputLabel>
-                    {clients.length > 0 && (
-                      <Select
-                        labelId="demo-simple-select-label"
-                        id="demo-simple-select"
-                        value={selectedClientId}
-                        label="Client"
-                        onChange={handleClientChange}
-                      >
-                        {clients.map((client) => (
-                          <MenuItem
-                            key={client.id}
-                            value={client.id}
-                            defaultChecked
-                          >
-                            {client.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    )}
-                  </FormControl>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box>
-                  <FormControl fullWidth>
-                    <InputLabel id="demo-simple-select-label">
-                      Assginee
-                    </InputLabel>
-                    {mappedUsers.length > 0 && (
-                      <Select
-                        labelId="demo-simple-select-label"
-                        id="demo-simple-select"
-                        value={selectedAssignee}
-                        label="Assignee"
-                        onChange={handleAssigneeChange}
-                      >
-                        {mappedUsers.map((mappedUser) => (
-                          <MenuItem key={mappedUser} value={mappedUser}>
-                            {mappedUser}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    )}
-                  </FormControl>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box>
-                  <FormControl fullWidth>
-                    <InputLabel id="demo-simple-select-label">
-                      Task Type
-                    </InputLabel>
+                <FormControl fullWidth>
+                  <InputLabel id="create-task-client-label">Client</InputLabel>
+                  {clients.length > 0 && (
                     <Select
-                      labelId="demo-simple-select-label"
-                      id="demo-simple-select"
-                      value={selectedTaskType}
-                      label="Task Type"
-                      onChange={handleTaskTypeChange}
+                      labelId="create-task-client-label"
+                      id="create-task-client"
+                      value={selectedClientId}
+                      label="Client"
+                      onChange={handleClientChange}
                     >
-                      <MenuItem value={1}>Account Payable</MenuItem>
-                      <MenuItem value={2}>Account Receivable</MenuItem>
-                      <MenuItem value={3}>General Task</MenuItem>
+                      {clients.map((client) => (
+                        <MenuItem key={client.id} value={client.id}>
+                          {client.name}
+                        </MenuItem>
+                      ))}
                     </Select>
-                  </FormControl>
-                </Box>
+                  )}
+                </FormControl>
+              </Grid>
+              <Grid item xs={6}>
+                <FormControl fullWidth>
+                  <InputLabel id="create-task-assignee-label">Assignee</InputLabel>
+                  {mappedUsers.length > 0 && (
+                    <Select
+                      labelId="create-task-assignee-label"
+                      id="create-task-assignee"
+                      value={selectedAssignee}
+                      label="Assignee"
+                      onChange={handleAssigneeChange}
+                    >
+                      {mappedUsers.map((mappedUser) => (
+                        <MenuItem key={mappedUser} value={mappedUser}>
+                          {mappedUser}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  )}
+                </FormControl>
+              </Grid>
+              <Grid item xs={6}>
+                <FormControl fullWidth>
+                  <InputLabel id="create-task-type-label">Task Type</InputLabel>
+                  <Select
+                    labelId="create-task-type-label"
+                    id="create-task-type"
+                    value={selectedTaskType}
+                    label="Task Type"
+                    onChange={handleTaskTypeChange}
+                  >
+                    <MenuItem value={1}>Account Payable</MenuItem>
+                    <MenuItem value={2}>Account Receivable</MenuItem>
+                    <MenuItem value={3}>General Task</MenuItem>
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={6}>
                 <TextField
@@ -248,80 +334,61 @@ function SchedularModule() {
                 />
               </Grid>
               <Grid item xs={6}>
-                <Box>
-                  <LocalizationProvider dateAdapter={AdapterDayjs}>
-                    <DemoContainer components={["DatePicker"]}>
-                      <DatePicker
-                        label="Start Date"
-                        value={startDate}
-                        onChange={(value) => setStartDate(value)}
-                        slotProps={{
-                          textField: { fullWidth: true, required: true },
-                        }}
-                        minDate={dayjs()}
-                      />
-                    </DemoContainer>
-                  </LocalizationProvider>
-                </Box>
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+                  <DemoContainer components={["DatePicker"]}>
+                    <DatePicker
+                      label="Start Date"
+                      value={startDate}
+                      onChange={(value) => setStartDate(value)}
+                      slotProps={{
+                        textField: { fullWidth: true, required: true },
+                      }}
+                      minDate={dayjs()}
+                    />
+                  </DemoContainer>
+                </LocalizationProvider>
               </Grid>
               <Grid item xs={6}>
-                <Box>
-                  <LocalizationProvider dateAdapter={AdapterDayjs}>
-                    <DemoContainer components={["DatePicker"]}>
-                      <DatePicker
-                        label="End Date"
-                        value={endDate}
-                        onChange={(value) => setEndDate(value)}
-                        slotProps={{
-                          textField: { fullWidth: true, required: true },
-                        }}
-                        minDate={startDate || dayjs()}
-                      />
-                    </DemoContainer>
-                  </LocalizationProvider>
-                </Box>
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+                  <DemoContainer components={["DatePicker"]}>
+                    <DatePicker
+                      label="End Date"
+                      value={endDate}
+                      onChange={(value) => setEndDate(value)}
+                      slotProps={{
+                        textField: { fullWidth: true, required: true },
+                      }}
+                      minDate={startDate || dayjs()}
+                    />
+                  </DemoContainer>
+                </LocalizationProvider>
               </Grid>
               <Grid item xs={6}>
-                <input className="" type="file" onChange={handleFileChange} />
+                <input type="file" onChange={handleFileChange} />
               </Grid>
-              <Grid
-                item
-                xs={12}
-                sx={{ justifyContent: "center", display: "flex" }}
-              >
-                <Button
-                  type="submit"
-                  fullWidth
-                  variant="contained"
-                  sx={{ maxWidth: 300 }}
-                >
-                  Create
-                </Button>
+              <Grid item xs={12}>
+                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={isCreating}
+                    sx={{ width: "auto", minWidth: 0, px: 3 }}
+                  >
+                    {isCreating ? "Creating..." : "Create"}
+                  </Button>
+                </Box>
               </Grid>
             </Grid>
           </Box>
         </Box>
       </Modal>
-      <Snackbar
-        anchorOrigin={{ vertical: "top", horizontal: "right" }}
-        open={showSnackbar}
-        autoHideDuration={5000}
-        onClose={() => setShowSnackbar(false)}
-        message={snackBarMsg}
-        key={"snackbar-top-right"}
-      />
-      <TaskList
-        tasksList={tasksList}
-        setShowEditTaskModal={(task) => {
-          setSelectedTask(task);
-          setShowEditTaskModal(true);
-        }}
-      />
+
       <EditTaskModal
         showModal={showEditTaskModal}
         handleClose={() => setShowEditTaskModal(false)}
         handleSave={handleTaskUpdate}
         selectedTask={selectedTask}
+        isSaving={isSaving}
       />
     </div>
   );

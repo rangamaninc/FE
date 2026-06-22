@@ -1,24 +1,6 @@
-import { Fragment, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-import {
-  Alert,
-  Box,
-  Button,
-  Collapse,
-  Grid,
-  IconButton,
-  MenuItem,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-} from "@mui/material";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import { Plus } from "lucide-react";
 import { getUserRole } from "../SignIn/authSlice";
 import {
   createClient,
@@ -26,268 +8,376 @@ import {
   getClientHierarchy,
   updateClient,
 } from "../../api/admin";
+import FormField from "../../components/forms/FormField";
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Card,
+  CardContent,
+  FormActions,
+  Input,
+  Modal,
+  ModalContent,
+  ModalDescription,
+  ModalHeader,
+  ModalTitle,
+  Spinner,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  useToast,
+} from "../../components/ui";
+import { downloadExcelFromRows } from "../../utils/exportTableData";
+import ClientHierarchyTable from "./ClientHierarchyTable";
+
+const emptyForm = {
+  name: "",
+  code: "",
+  type: "Captive Manager",
+  parentId: "",
+};
+
+function flattenClients(managers) {
+  return managers.flatMap((manager) => [
+    {
+      id: manager.id,
+      type: manager.type || "Captive Manager",
+      name: manager.name,
+      code: manager.code || "",
+      parentName: "-",
+      parent_id: manager.parent_id,
+    },
+    ...(manager.captives?.map((captive) => ({
+      id: captive.id,
+      type: captive.type || "Captive",
+      name: captive.name,
+      code: captive.code || "",
+      parentName: manager.name,
+      parent_id: captive.parent_id ?? manager.id,
+    })) ?? []),
+  ]);
+}
 
 export default function AdminClients() {
   const userRole = useSelector(getUserRole);
   const isAllowed = new Set(["admin", "manager"]).has(userRole?.toLowerCase());
   const isAdmin = userRole?.toLowerCase() === "admin";
-  const [expanded, setExpanded] = useState({});
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [data, setData] = useState([]);
-  const [editingClientId, setEditingClientId] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    code: "",
-    type: "Captive Manager",
-    parentId: "",
-  });
+  const { toast } = useToast();
 
-  const loadClients = async () => {
+  const [managers, setManagers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [formMode, setFormMode] = useState("add");
+  const [editingClientId, setEditingClientId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [formError, setFormError] = useState("");
+
+  const loadClients = useCallback(async () => {
+    setLoading(true);
     try {
       const response = await getClientHierarchy();
-      setData(response);
+      setManagers(response);
     } catch (err) {
-      setError(err?.response?.data?.error || "Unable to fetch clients.");
+      toast({
+        title: "Failed to load clients",
+        description: err?.response?.data?.error || "Unable to fetch clients.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     loadClients();
-  }, []);
+  }, [loadClients]);
 
-  const onChange = (key) => (event) => {
-    setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  const handleExcelDownload = useCallback(() => {
+    downloadExcelFromRows({
+      rows: flattenClients(managers),
+      columns: [
+        { header: "Type", accessor: "type" },
+        { header: "Name", accessor: "name" },
+        { header: "Code", accessor: "code" },
+        { header: "Parent Manager", accessor: "parentName" },
+      ],
+      fileName: "clients",
+    });
+  }, [managers]);
+
+  const resetForm = () => {
+    setForm(emptyForm);
+    setFormError("");
+    setEditingClientId(null);
+    setFormMode("add");
   };
 
-  const onSubmit = async (event) => {
-    event.preventDefault();
-    setMessage("");
-    setError("");
+  const handleOpenForm = () => {
+    resetForm();
+    setShowForm(true);
+  };
+
+  const handleCloseForm = () => {
+    setShowForm(false);
+    resetForm();
+  };
+
+  const handleEdit = (client) => {
+    if (!isAdmin) return;
+    setFormMode("edit");
+    setEditingClientId(client.id);
+    setForm({
+      name: client.name,
+      code: client.code || "",
+      type: client.type,
+      parentId: client.parent_id ? String(client.parent_id) : "",
+    });
+    setFormError("");
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.name || !form.code) {
+      setFormError("Name and code are required.");
+      return;
+    }
+
+    setFormError("");
+    setIsSaving(true);
+
     try {
       const payload = {
         name: form.name,
         code: form.code,
         type: form.type,
-        parentId: form.parentId || null,
+        parentId: form.type === "Captive" ? form.parentId || null : null,
       };
-      if (editingClientId) {
+
+      if (formMode === "edit" && editingClientId) {
         await updateClient(editingClientId, payload);
-        setMessage("Client updated successfully.");
+        toast({
+          title: "Client updated",
+          description: "The client was updated successfully.",
+          variant: "success",
+        });
       } else {
         await createClient(payload);
-        setMessage("Client created successfully.");
+        toast({
+          title: "Client created",
+          description: "The client was created successfully.",
+          variant: "success",
+        });
       }
-      setEditingClientId(null);
-      setForm({ name: "", code: "", type: "Captive Manager", parentId: "" });
-      setShowForm(false);
+      handleCloseForm();
       await loadClients();
     } catch (err) {
-      setError(err?.response?.data?.error || "Unable to save client.");
+      setFormError(err?.response?.data?.error || "Unable to save client.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    setMessage("");
-    setError("");
+  const handleDelete = async () => {
+    if (!deleteTarget?.id) return;
+
+    setIsDeleting(true);
     try {
-      await deleteClient(id);
-      setMessage("Client deleted successfully.");
+      await deleteClient(deleteTarget.id);
+      toast({
+        title: "Client deleted",
+        description: "The client was removed successfully.",
+        variant: "success",
+      });
+      setDeleteTarget(null);
       await loadClients();
     } catch (err) {
-      setError(err?.response?.data?.error || "Unable to delete client.");
+      toast({
+        title: "Delete failed",
+        description: err?.response?.data?.error || "Unable to delete client.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
     }
-  };
-
-  const handleEdit = (client) => {
-    setEditingClientId(client.id);
-    setShowForm(true);
-    setForm({
-      name: client.name,
-      code: client.code || "",
-      type: client.type,
-      parentId: client.parent_id || "",
-    });
   };
 
   if (!isAllowed) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Typography variant="h6">You are not authorized to view Clients.</Typography>
-      </Box>
+      <Alert variant="destructive">
+        <AlertDescription>You are not authorized to view Clients.</AlertDescription>
+      </Alert>
     );
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h5" sx={{ mb: 2 }}>
-        Clients
-      </Typography>
+    <div className="flex min-h-[calc(100vh-12rem)] flex-col space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Clients</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isAdmin
+              ? "Manage captive managers and linked captives."
+              : "View captive managers and linked captives."}
+          </p>
+        </div>
+        {isAdmin ? (
+          <Button onClick={handleOpenForm}>
+            <Plus className="h-4 w-4" />
+            Add client
+          </Button>
+        ) : null}
+      </div>
 
-      {!isAdmin && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Manager role has view-only access. Update actions are disabled.
-        </Alert>
-      )}
-
-      {message && <Alert sx={{ mb: 2 }}>{message}</Alert>}
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      {isAdmin && (
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
-            <Typography variant="h6">{editingClientId ? "Update Client" : "Add Client"}</Typography>
-            {!showForm && (
-              <Button
-                variant="contained"
-                onClick={() => {
-                  setEditingClientId(null);
-                  setForm({ name: "", code: "", type: "Captive Manager", parentId: "" });
-                  setShowForm(true);
-                }}
-              >
-                Add Client
-              </Button>
-            )}
-          </Box>
-          {showForm && (
-            <Box component="form" onSubmit={onSubmit}>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={3}>
-                  <TextField fullWidth label="Name" value={form.name} onChange={onChange("name")} />
-                </Grid>
-                <Grid item xs={12} md={3}>
-                  <TextField fullWidth label="Code" value={form.code} onChange={onChange("code")} />
-                </Grid>
-                <Grid item xs={12} md={3}>
-                  <TextField select fullWidth label="Type" value={form.type} onChange={onChange("type")}>
-                    <MenuItem value="Captive Manager">Captive Manager</MenuItem>
-                    <MenuItem value="Captive">Captive</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid item xs={12} md={3}>
-                  <TextField
-                    select
-                    fullWidth
-                    label="Parent Manager"
-                    value={form.parentId}
-                    onChange={onChange("parentId")}
-                    disabled={form.type !== "Captive"}
-                  >
-                    <MenuItem value="">None</MenuItem>
-                    {data.map((manager) => (
-                      <MenuItem key={manager.id} value={manager.id}>
-                        {manager.name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                <Grid item xs={12}>
-                  <Button type="submit" variant="contained" sx={{ mr: 1 }}>
-                    {editingClientId ? "Update Client" : "Create Client"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outlined"
-                    onClick={() => {
-                      setShowForm(false);
-                      setEditingClientId(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </Grid>
-              </Grid>
-            </Box>
+      <Card className="flex flex-1 flex-col">
+        <CardContent className="flex flex-1 flex-col pt-6">
+          {loading ? (
+            <div className="flex min-h-[200px] flex-1 items-center justify-center">
+              <Spinner label="Loading clients..." />
+            </div>
+          ) : (
+            <ClientHierarchyTable
+              className="flex-1"
+              managers={managers}
+              isAdmin={isAdmin}
+              onRefresh={loadClients}
+              isRefreshing={loading}
+              onExcelDownload={handleExcelDownload}
+              onEdit={isAdmin ? handleEdit : undefined}
+              onDelete={isAdmin ? setDeleteTarget : undefined}
+            />
           )}
-        </Paper>
-      )}
+        </CardContent>
+      </Card>
 
-      <Paper sx={{ p: 2 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Captive Managers
-        </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell />
-              <TableCell>Name</TableCell>
-              <TableCell>Code</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {data.map((manager) => (
-              <Fragment key={manager.id}>
-                <TableRow>
-                  <TableCell>
-                    <IconButton
-                      size="small"
-                      onClick={() => setExpanded((prev) => ({ ...prev, [manager.id]: !prev[manager.id] }))}
-                    >
-                      {expanded[manager.id] ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                    </IconButton>
-                  </TableCell>
-                  <TableCell>{manager.name}</TableCell>
-                  <TableCell>{manager.code}</TableCell>
-                  <TableCell align="right">
-                    <Button size="small" onClick={() => handleEdit(manager)} disabled={!isAdmin}>
-                      Edit
-                    </Button>
-                    <Button size="small" color="error" onClick={() => handleDelete(manager.id)} disabled={!isAdmin}>
-                      Delete
-                    </Button>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell colSpan={4} sx={{ py: 0 }}>
-                    <Collapse in={!!expanded[manager.id]} timeout="auto" unmountOnExit>
-                      <Box sx={{ p: 1 }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                          Linked Captives
-                        </Typography>
-                        <Table size="small">
-                          <TableBody>
-                            {manager.captives?.map((captive) => (
-                              <TableRow key={captive.id}>
-                                <TableCell>{captive.name}</TableCell>
-                                <TableCell>{captive.code}</TableCell>
-                                <TableCell align="right">
-                                  <Button size="small" onClick={() => handleEdit(captive)} disabled={!isAdmin}>
-                                    Edit
-                                  </Button>
-                                  <Button
-                                    size="small"
-                                    color="error"
-                                    onClick={() => handleDelete(captive.id)}
-                                    disabled={!isAdmin}
-                                  >
-                                    Delete
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                            {!manager.captives?.length && (
-                              <TableRow>
-                                <TableCell colSpan={3}>No linked captives.</TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </Box>
-                    </Collapse>
-                  </TableCell>
-                </TableRow>
-              </Fragment>
-            ))}
-          </TableBody>
-        </Table>
-      </Paper>
-    </Box>
+      <Modal open={showForm} onOpenChange={(open) => !open && handleCloseForm()}>
+        <ModalContent className="max-w-lg">
+          <ModalHeader>
+            <ModalTitle>
+              {formMode === "edit" ? "Edit Client" : "Add Client"}
+            </ModalTitle>
+            <ModalDescription>
+              {formMode === "edit"
+                ? "Update client name, code, type, and parent manager."
+                : "Enter details to create a new client."}
+            </ModalDescription>
+          </ModalHeader>
+          {formError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{formError}</AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="space-y-4">
+            <FormField label="Name" htmlFor="clientName" required>
+              <Input
+                id="clientName"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Code" htmlFor="clientCode" required>
+              <Input
+                id="clientCode"
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Type" required>
+              <Select
+                value={form.type}
+                onValueChange={(value) =>
+                  setForm({
+                    ...form,
+                    type: value,
+                    parentId: value === "Captive Manager" ? "" : form.parentId,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Captive Manager">Captive Manager</SelectItem>
+                  <SelectItem value="Captive">Captive</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+            {form.type === "Captive" ? (
+              <FormField label="Parent Manager">
+                <Select
+                  value={form.parentId || undefined}
+                  onValueChange={(value) => setForm({ ...form, parentId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select parent manager" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {managers.map((manager) => (
+                      <SelectItem key={manager.id} value={String(manager.id)}>
+                        {manager.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+            ) : null}
+            <FormActions>
+              <Button type="button" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? "Saving..." : formMode === "edit" ? "Update" : "Save"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCloseForm}
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+            </FormActions>
+          </div>
+        </ModalContent>
+      </Modal>
+
+      <Modal
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && !isDeleting && setDeleteTarget(null)}
+      >
+        <ModalContent className="max-w-md">
+          <ModalHeader>
+            <ModalTitle>Delete client?</ModalTitle>
+            <ModalDescription>
+              This will permanently remove{" "}
+              <span className="font-medium text-foreground">
+                {deleteTarget?.name}
+              </span>{" "}
+              ({deleteTarget?.code}). This action cannot be undone.
+            </ModalDescription>
+          </ModalHeader>
+          <FormActions>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+          </FormActions>
+        </ModalContent>
+      </Modal>
+    </div>
   );
 }

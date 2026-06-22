@@ -1,160 +1,129 @@
-import Modal from "@mui/material/Modal";
-import Box from "@mui/material/Box";
-
-import { useState } from "react";
-import Typography from "@mui/material/Typography";
+import { useEffect, useState } from "react";
 import PropTypes from "prop-types";
-import { Button, Grid } from "@mui/material";
-import Select from "react-select";
 import dayjs from "dayjs";
+import {
+  Button,
+  FormActions,
+  Modal,
+  ModalContent,
+  ModalDescription,
+  ModalHeader,
+  ModalTitle,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui";
 
-const options = [
+const STATUS_OPTIONS = [
   { value: "Todo", label: "Todo" },
   { value: "In progress", label: "In progress" },
   { value: "Done", label: "Done" },
 ];
 
-const style = {
-  position: "absolute",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  width: 450,
-  bgcolor: "background.paper",
-  boxShadow: 24,
-  borderRadius: 1,
-  p: 2,
-};
+function normalizeStatus(status) {
+  if (!status) return "";
+  const match = STATUS_OPTIONS.find(
+    (option) =>
+      option.value.toLowerCase() === String(status).toLowerCase() ||
+      option.label.toLowerCase() === String(status).toLowerCase()
+  );
+  return match?.value ?? status;
+}
 
 export default function EditTaskModal({
   showModal,
   handleClose,
   handleSave,
   selectedTask,
+  isSaving = false,
 }) {
-  const [taskData, setTaskData] = useState({
-    status: "",
-  });
-  const { assigned_to, start_date, end_date, status } = selectedTask;
+  const [status, setStatus] = useState("");
+  const isDone = normalizeStatus(selectedTask?.status) === "Done";
+
+  useEffect(() => {
+    if (showModal) {
+      setStatus(normalizeStatus(selectedTask?.status));
+    }
+  }, [showModal, selectedTask]);
+
+  const handleOpenChange = (open) => {
+    if (!open && !isSaving) {
+      handleClose();
+    }
+  };
 
   return (
-    <Modal
-      open={showModal}
-      onClose={handleClose}
-      aria-labelledby="modal-modal-title"
-      aria-describedby="modal-modal-description"
-    >
-      <Box sx={style}>
-        <Typography
-          sx={{ marginBottom: 2 }}
-          id="modal-modal-title"
-          variant="h6"
-          component="h2"
-        >
-          <b>Task details</b>
-        </Typography>
-        <Box sx={{ marginBottom: 2 }}>
-          <Grid container>
-            <Grid
-              item
-              xs={6}
-              sx={{ justifyContent: "center", display: "flex" }}
+    <Modal open={showModal} onOpenChange={handleOpenChange}>
+      <ModalContent className="max-w-md">
+        <ModalHeader>
+          <ModalTitle>Task details</ModalTitle>
+          <ModalDescription>Review task information and update status.</ModalDescription>
+        </ModalHeader>
+
+        <div className="space-y-4 text-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <span className="text-muted-foreground">Assignee</span>
+            <span className="font-medium text-foreground">
+              {selectedTask?.assigned_to || "-"}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <span className="text-muted-foreground">Start date</span>
+            <span className="font-medium text-foreground">
+              {selectedTask?.start_date
+                ? dayjs(selectedTask.start_date).format("MM/DD/YYYY")
+                : "-"}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <span className="text-muted-foreground">End date</span>
+            <span className="font-medium text-foreground">
+              {selectedTask?.end_date
+                ? dayjs(selectedTask.end_date).format("MM/DD/YYYY")
+                : "-"}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 items-center gap-2">
+            <span className="text-muted-foreground">Status</span>
+            <Select
+              value={status || undefined}
+              onValueChange={setStatus}
+              disabled={isDone}
             >
-              Assignee
-            </Grid>
-            <Grid
-              item
-              xs={6}
-              sx={{ justifyContent: "center", display: "flex" }}
-            >
-              {assigned_to}
-            </Grid>
-          </Grid>
-        </Box>
-        <Box sx={{ marginBottom: 2 }}>
-          <Grid container>
-            <Grid
-              item
-              xs={6}
-              sx={{ justifyContent: "center", display: "flex" }}
-            >
-              Start date
-            </Grid>
-            <Grid
-              item
-              xs={6}
-              sx={{ justifyContent: "center", display: "flex" }}
-            >
-              {dayjs(start_date).format("MM/DD/YYYY")}
-            </Grid>
-          </Grid>
-        </Box>
-        <Box sx={{ marginBottom: 2 }}>
-          <Grid container>
-            <Grid
-              item
-              xs={6}
-              sx={{ justifyContent: "center", display: "flex" }}
-            >
-              End date
-            </Grid>
-            <Grid
-              item
-              xs={6}
-              sx={{ justifyContent: "center", display: "flex" }}
-            >
-              {dayjs(end_date).format("MM/DD/YYYY")}
-            </Grid>
-          </Grid>
-        </Box>
-        <Box sx={{ marginBottom: 2 }}>
-          <Grid container>
-            <Grid
-              item
-              xs={6}
-              sx={{ justifyContent: "center", display: "flex" }}
-            >
-              Status
-            </Grid>
-            <Grid
-              item
-              xs={6}
-              sx={{ justifyContent: "center", display: "flex" }}
-            >
-              <Select
-                value={taskData.status || status}
-                options={options}
-                isDisabled={status === "Done"}
-                onChange={(option) => setTaskData({ status: option.label })}
-              />
-            </Grid>
-          </Grid>
-        </Box>
-        <Box>
-          <Grid container>
-            <Grid
-              item
-              xs={6}
-              sx={{ justifyContent: "center", display: "flex" }}
-            >
-              <Button onClick={handleClose}>Cancel</Button>
-            </Grid>
-            <Grid
-              item
-              xs={6}
-              sx={{ justifyContent: "center", display: "flex" }}
-            >
-              <Button
-                disabled={status === "Done"}
-                variant="contained"
-                onClick={() => handleSave(taskData)}
-              >
-                Save
-              </Button>
-            </Grid>
-          </Grid>
-        </Box>
-      </Box>
+              <SelectTrigger>
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <FormActions align="end" fitContent>
+          <Button
+            type="button"
+            onClick={() => handleSave({ status })}
+            disabled={isDone || isSaving || !status}
+          >
+            {isSaving ? "Saving..." : "Save"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleClose}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+        </FormActions>
+      </ModalContent>
     </Modal>
   );
 }
@@ -164,4 +133,5 @@ EditTaskModal.propTypes = {
   handleClose: PropTypes.func.isRequired,
   handleSave: PropTypes.func.isRequired,
   selectedTask: PropTypes.object.isRequired,
+  isSaving: PropTypes.bool,
 };

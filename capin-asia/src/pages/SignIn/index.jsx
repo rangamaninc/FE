@@ -1,18 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
-
-import Avatar from "@mui/material/Avatar";
-import Button from "@mui/material/Button";
-import CssBaseline from "@mui/material/CssBaseline";
-import TextField from "@mui/material/TextField";
-import Link from "@mui/material/Link";
-import Box from "@mui/material/Box";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import Typography from "@mui/material/Typography";
-import Container from "@mui/material/Container";
-import { createTheme, ThemeProvider } from "@mui/material/styles";
-
 import { signIn } from "../../api/SignIn";
 import { userSignIn } from "./authSlice";
 import {
@@ -21,54 +9,50 @@ import {
   setSelectedClient,
 } from "../../redux/globalSlice";
 import { getGLCodesByClientId } from "../../api/user";
+import { Alert, AlertDescription, Button, Input } from "../../components/ui";
+import FormField from "../../components/forms/FormField";
+import { consumeSessionExpiredMessage } from "../../utils/authSession";
 
-function Copyright(props) {
-  return (
-    <Typography
-      variant="body2"
-      color="text.secondary"
-      align="center"
-      {...props}
-    >
-      {"Copyright © "}
-      <Link color="inherit" href="https://mui.com/">
-        Your Website
-      </Link>{" "}
-      {new Date().getFullYear()}
-      {"."}
-    </Typography>
-  );
-}
-
-const defaultTheme = createTheme();
-
+/** SignIn form — same auth logic as before, TailAdmin styling. */
 export default function SignIn() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const sessionMessage = consumeSessionExpiredMessage();
+    if (sessionMessage) {
+      setErrorMessage(sessionMessage);
+    }
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const email = data.get("email");
     const password = data.get("password");
+
     if (!email || !password) {
       setErrorMessage("Please enter valid username and password");
       return;
-    } else {
-      setErrorMessage("");
     }
+
+    setErrorMessage("");
+    setIsSubmitting(true);
 
     let res;
     try {
       res = await signIn({ id: email, password });
     } catch (error) {
       setErrorMessage(error.message || "Login failed. Please try again.");
+      setIsSubmitting(false);
       return;
     }
 
     if (!res?.token) {
       setErrorMessage(res?.error || "Login failed. Please try again.");
+      setIsSubmitting(false);
       return;
     }
 
@@ -78,6 +62,7 @@ export default function SignIn() {
       setErrorMessage(
         "No clients assigned to your account. Contact an administrator."
       );
+      setIsSubmitting(false);
       return;
     }
 
@@ -104,64 +89,41 @@ export default function SignIn() {
   };
 
   return (
-    <ThemeProvider theme={defaultTheme}>
-      <Container component="main" maxWidth="xs">
-        <CssBaseline />
-        <Box
-          sx={{
-            marginTop: 8,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-          }}
-        >
-          <Avatar sx={{ m: 1, bgcolor: "secondary.main" }}>
-            <LockOutlinedIcon />
-          </Avatar>
-          <Typography component="h1" variant="h5">
-            Sign in
-          </Typography>
-          <Box
-            component="form"
-            onSubmit={handleSubmit}
-            noValidate
-            sx={{ mt: 1 }}
-          >
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              id="email"
-              label="Email Address"
-              name="email"
-              autoComplete="email"
-              autoFocus
-            />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="password"
-              label="Password"
-              type="password"
-              id="password"
-              autoComplete="current-password"
-            />
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              sx={{ mt: 3, mb: 2 }}
-            >
-              Sign In
-            </Button>
-          </Box>
-          {errorMessage && (
-            <Typography sx={{ color: "#f44336" }}>{errorMessage} </Typography>
-          )}
-        </Box>
-        <Copyright sx={{ mt: 8, mb: 4 }} />
-      </Container>
-    </ThemeProvider>
+    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+      {errorMessage ? (
+        <Alert variant="destructive">
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <FormField label="Email Address" htmlFor="email" required>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          autoFocus
+          required
+        />
+      </FormField>
+
+      <FormField label="Password" htmlFor="password" required>
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+        />
+      </FormField>
+
+      <Button type="submit" className="w-full" disabled={isSubmitting}>
+        {isSubmitting ? "Signing in..." : "Sign In"}
+      </Button>
+
+      <p className="pt-2 text-center text-xs text-muted-foreground">
+        © {new Date().getFullYear()} CapinAsia
+      </p>
+    </form>
   );
 }

@@ -23,6 +23,28 @@ export const addOpeningBalance = async (clientId, data) => {
   return res.data;
 };
 
+export const updateOpeningBalance = async (clientId, id, data) => {
+  const res = await axios.put(
+    `/cashbook/${clientId}/opening-balance/${id}`,
+    data
+  );
+  return res.data;
+};
+
+export const deleteOpeningBalance = async (clientId, id) => {
+  const res = await axios.delete(
+    `/cashbook/${clientId}/opening-balance/${id}`
+  );
+  return res.data;
+};
+
+export const postOpeningBalances = async (clientId) => {
+  const res = await axios.post(
+    `/cashbook/${clientId}/opening-balance/post`
+  );
+  return res.data;
+};
+
 export const getAllTransactionsOfClient = async (
   clientId,
   cashbookId,

@@ -1,53 +1,83 @@
-import React from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSelector } from "react-redux";
-import { Box, Button, Typography, Snackbar } from "@mui/material";
-import dayjs from "dayjs";
-
-import { addOpeningBalance, getOpeningBalances } from "../../api/cashbook";
+import { Plus, Send } from "lucide-react";
+import {
+  addOpeningBalance,
+  deleteOpeningBalance,
+  getOpeningBalances,
+  postOpeningBalances,
+  updateOpeningBalance,
+} from "../../api/cashbook";
 import { getGLCodesByClientId } from "../../api/user";
 import {
   getSelectedClient,
   getSelectedClientGLCodesMap,
 } from "../../redux/globalSlice";
 import {
-  formatGlCodeLabel,
-  renderOpeningBalanceTable,
-} from "./tableTemplate";
-import { renderOpeningBalanceForm } from "./formTemplate";
+  Alert,
+  AlertDescription,
+  Button,
+  Card,
+  CardContent,
+  Modal,
+  ModalContent,
+  ModalDescription,
+  ModalHeader,
+  ModalTitle,
+  Spinner,
+  EmptyState,
+  useToast,
+  FormActions,
+} from "../../components/ui";
+import OpeningBalanceForm from "./OpeningBalanceForm";
+import OpeningBalanceTable from "./OpeningBalanceTable";
+import {
+  deriveFinancialYear,
+  emptyFormState,
+  normalizeRecord,
+  recordToFormState,
+} from "./openingBalanceUtils";
 
-function normalizeRecord(row) {
+function buildSavePayload(currentGLRow) {
+  const financialYear =
+    currentGLRow.financialYear ||
+    deriveFinancialYear(currentGLRow.openingBalanceDate);
+
   return {
-    id: row.id,
-    glCode: row.glCode ?? row.glcode,
-    glName: row.glName ?? row.glname ?? null,
-    openingBalanceDate: row.openingBalanceDate ?? row.date,
-    amount: row.amount,
-    isDebit: row.isDebit ?? row.is_debit,
-    updatedBy: row.updatedBy ?? row.updated_by,
+    openingBalanceDate: currentGLRow.openingBalanceDate,
+    amount: Number(currentGLRow.amount),
+    glCode: currentGLRow.glCode,
+    isDebit: currentGLRow.type === "debit",
+    financialYear,
+    currencyCode: currentGLRow.currencyCode || "USD",
+    remarks: currentGLRow.remarks || undefined,
   };
 }
 
-function OpeningModule() {
+export default function OpeningModule() {
   const selectedClient = useSelector(getSelectedClient);
   const glCodesMap = useSelector(getSelectedClientGLCodesMap);
   const clientId = selectedClient?.id;
+  const clientName = selectedClient?.name;
+  const { toast } = useToast();
 
-  const [refreshKey, setRefreshKey] = React.useState(0);
-  const [showForm, setShowForm] = React.useState(false);
-  const [records, setRecords] = React.useState([]);
-  const [loading, setLoading] = React.useState(false);
-  const [tableError, setTableError] = React.useState("");
-  const [formError, setFormError] = React.useState("");
-  const [showSnackbar, setShowSnackbar] = React.useState(false);
-  const [clientGLCodes, setClientGLCodes] = React.useState([]);
-  const [currentGLRow, setCurrentGLRow] = React.useState({
-    glCode: "",
-    amount: 0,
-    openingBalanceDate: "",
-    type: "credit",
-  });
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [showForm, setShowForm] = useState(false);
+  const [formMode, setFormMode] = useState("add");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [tableError, setTableError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [clientGLCodes, setClientGLCodes] = useState([]);
+  const [currentGLRow, setCurrentGLRow] = useState(emptyFormState);
+  const [postResult, setPostResult] = useState(null);
+  const [showPostDialog, setShowPostDialog] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!clientId) {
       setRecords([]);
       return;
@@ -95,7 +125,7 @@ function OpeningModule() {
     };
   }, [clientId, refreshKey]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!clientId || !showForm) {
       return;
     }
@@ -110,26 +140,10 @@ function OpeningModule() {
     label: `${glCodeObj.code} - ${glCodeObj.name}`,
   }));
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "";
-    const parsed = dayjs(dateStr, "MM/DD/YYYY", true);
-    return parsed.isValid() ? parsed.format("MM/DD/YYYY") : String(dateStr);
-  };
-
-  const formatType = (isDebit) =>
-    isDebit === "1" || isDebit === 1 || isDebit === true ? "Debit" : "Credit";
-
-  const formatGlCode = (glCode, glName) =>
-    formatGlCodeLabel(glCode, glName ?? glCodesMap[glCode]);
-
   const resetForm = () => {
-    setCurrentGLRow({
-      glCode: "",
-      amount: 0,
-      openingBalanceDate: "",
-      type: "credit",
-    });
+    setCurrentGLRow(emptyFormState);
     setFormError("");
+    setFormMode("add");
   };
 
   const handleSaved = () => {
@@ -144,22 +158,39 @@ function OpeningModule() {
       return;
     }
 
+    const financialYear =
+      currentGLRow.financialYear ||
+      deriveFinancialYear(currentGLRow.openingBalanceDate);
+
     if (!currentGLRow.glCode || !currentGLRow.openingBalanceDate) {
-      setFormError("Please select a GL code and date");
+      setFormError("Please select a GL code and balance date");
+      return;
+    }
+
+    if (!financialYear) {
+      setFormError("Please enter a valid financial year");
       return;
     }
 
     setFormError("");
+    setIsSaving(true);
+
+    const payload = buildSavePayload(currentGLRow);
+    const isEdit = formMode === "edit" && currentGLRow.id;
+
     try {
-      const res = await addOpeningBalance(clientId, {
-        openingBalanceDate: currentGLRow.openingBalanceDate,
-        amount: Number(currentGLRow.amount),
-        glCode: currentGLRow.glCode,
-        isDebit: currentGLRow.type === "debit",
-      });
+      const res = isEdit
+        ? await updateOpeningBalance(clientId, currentGLRow.id, payload)
+        : await addOpeningBalance(clientId, payload);
 
       if (res.success) {
-        setShowSnackbar(true);
+        toast({
+          title: isEdit ? "Opening balance updated" : "Opening balance added",
+          description: isEdit
+            ? "The record was updated successfully."
+            : "The record was saved successfully.",
+          variant: "success",
+        });
         handleSaved();
       } else {
         setFormError(res.error || "Please provide valid details");
@@ -173,89 +204,333 @@ function OpeningModule() {
           "Cannot reach the server. Check that the API and database are running."
         );
       } else {
-        setFormError("Failed to save opening balance. Check GL code and date.");
+        setFormError(
+          isEdit
+            ? "Failed to update opening balance."
+            : "Failed to save opening balance. Check GL code and date."
+        );
       }
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  return (
-    <div className="m-4">
-      <Typography variant="h6" component="h1" sx={{ mb: 1 }}>
-        Opening Balance
-      </Typography>
+  const handleOpenForm = () => {
+    resetForm();
+    setFormMode("add");
+    setShowForm(true);
+  };
 
-      <div style={{ marginTop: 16, marginBottom: 32 }}>
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 1,
-          }}
-        >
-          <Typography variant="subtitle1" component="h2">
-            Opening Balance Records
-          </Typography>
-          {!showForm && (
-            <Button variant="contained" onClick={() => setShowForm(true)}>
+  const handleEdit = (record) => {
+    setFormMode("edit");
+    setCurrentGLRow(recordToFormState(record));
+    setFormError("");
+    setShowForm(true);
+  };
+
+  const handleCloseForm = () => {
+    setShowForm(false);
+    resetForm();
+  };
+
+  const handleDelete = async () => {
+    if (!clientId || !deleteTarget?.id) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      const res = await deleteOpeningBalance(clientId, deleteTarget.id);
+
+      if (res.success) {
+        toast({
+          title: "Opening balance deleted",
+          description: "The record was removed successfully.",
+          variant: "success",
+        });
+        setDeleteTarget(null);
+        setRefreshKey((key) => key + 1);
+      } else {
+        toast({
+          title: "Delete failed",
+          description: res.error || "Could not delete the record.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Delete failed",
+        description:
+          err.response?.data?.error ||
+          "Failed to delete opening balance. Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handlePost = async () => {
+    if (!clientId) {
+      toast({
+        title: "No client selected",
+        description: "Please select a client to post opening balances.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const draftRecords = records.filter(
+      (r) => !r.postingStatus || r.postingStatus === "DRAFT"
+    );
+
+    if (draftRecords.length === 0) {
+      toast({
+        title: "Nothing to post",
+        description: "No draft opening balances found to post.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsPosting(true);
+    setPostResult(null);
+
+    try {
+      const res = await postOpeningBalances(clientId);
+
+      if (res.success) {
+        setPostResult(res);
+        setShowPostDialog(true);
+        setRefreshKey((key) => key + 1);
+      } else {
+        toast({
+          title: "Post failed",
+          description: res.error || "Failed to post opening balances.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      const errorMsg =
+        err.response?.data?.error || err.message || "Failed to post opening balances.";
+      toast({
+        title: "Post failed",
+        description: errorMsg,
+        variant: "destructive",
+      });
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  const draftCount = records.filter(
+    (r) => !r.postingStatus || r.postingStatus === "DRAFT"
+  ).length;
+
+  const postedCount = records.filter(
+    (r) => r.postingStatus === "POSTED"
+  ).length;
+
+  const subtitle = clientName
+    ? `Manage opening balance entries for ${clientName}.`
+    : "Manage opening balance entries for the selected client.";
+
+  return (
+    <div className="flex min-h-[calc(100vh-12rem)] flex-col space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Opening Balance</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+        {clientId ? (
+          <div className="flex items-center gap-2">
+            {draftCount > 0 && (
+              <Button
+                variant="default"
+                onClick={handlePost}
+                disabled={isPosting}
+              >
+                <Send className="h-4 w-4 mr-1" />
+                {isPosting ? "Posting..." : `Post (${draftCount})`}
+              </Button>
+            )}
+            <Button onClick={handleOpenForm}>
+              <Plus className="h-4 w-4" />
               Add new balance
             </Button>
-          )}
-        </Box>
-
-        {!clientId ? (
-          <Typography color="text.secondary">
-            Select a client to view opening balances.
-          </Typography>
-        ) : loading ? (
-          <Typography color="text.secondary">Loading...</Typography>
-        ) : (
-          <>
-            {tableError && (
-              <Typography sx={{ color: "#f44336", mb: 1 }}>
-                {tableError}
-              </Typography>
-            )}
-            {renderOpeningBalanceTable(
-              records,
-              formatDate,
-              formatType,
-              formatGlCode
-            )}
-          </>
-        )}
+          </div>
+        ) : null}
       </div>
 
-      {showForm && (
-        <>
-          <Typography variant="h6" component="h2" sx={{ mt: 2 }}>
-            Add Opening Balance
-          </Typography>
-          {renderOpeningBalanceForm({
-            glOptions,
-            currentGLRow,
-            setCurrentGLRow,
-            onSave: handleSave,
-            onCancel: () => {
-              setShowForm(false);
-              resetForm();
-            },
-          })}
-          {formError && (
-            <Typography sx={{ color: "#f44336" }}>{formError}</Typography>
-          )}
-        </>
+      {draftCount > 0 && postedCount > 0 && (
+        <div className="text-sm text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-yellow-500" />
+            {draftCount} draft
+          </span>
+          <span className="mx-2">|</span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-green-500" />
+            {postedCount} posted
+          </span>
+        </div>
       )}
 
-      <Snackbar
-        anchorOrigin={{ vertical: "top", horizontal: "right" }}
-        open={showSnackbar}
-        autoHideDuration={5000}
-        onClose={() => setShowSnackbar(false)}
-        message="Opening Balance added"
-      />
+      <Card className="flex flex-1 flex-col">
+        <CardContent className="flex flex-1 flex-col pt-6">
+          {!clientId ? (
+            <EmptyState
+              title="No client selected"
+              description="Choose a client from the main header to load opening balances."
+            />
+          ) : loading ? (
+            <div className="flex min-h-[200px] flex-1 items-center justify-center">
+              <Spinner label="Loading opening balances..." />
+            </div>
+          ) : (
+            <>
+              {tableError ? (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>{tableError}</AlertDescription>
+                </Alert>
+              ) : null}
+              <OpeningBalanceTable
+                className="flex-1"
+                records={records}
+                glCodesMap={glCodesMap}
+                onEdit={handleEdit}
+                onDelete={setDeleteTarget}
+                onRefresh={() => setRefreshKey((key) => key + 1)}
+                isRefreshing={loading}
+                excelFileName={
+                  clientName
+                    ? `opening-balances-${clientName}`
+                    : "opening-balances"
+                }
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Add/Edit Form Modal */}
+      <Modal open={showForm} onOpenChange={(open) => !open && handleCloseForm()}>
+        <ModalContent className="max-w-lg">
+          <ModalHeader>
+            <ModalTitle>
+              {formMode === "edit" ? "Edit Opening Balance" : "Add Opening Balance"}
+            </ModalTitle>
+            <ModalDescription>
+              {formMode === "edit"
+                ? "Update GL code, financial year, balance date, amount, and type."
+                : "Enter GL code, financial year, balance date, amount, and type."}
+            </ModalDescription>
+          </ModalHeader>
+          {formError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{formError}</AlertDescription>
+            </Alert>
+          ) : null}
+          <OpeningBalanceForm
+            glOptions={glOptions}
+            currentGLRow={currentGLRow}
+            setCurrentGLRow={setCurrentGLRow}
+            onSave={handleSave}
+            onCancel={handleCloseForm}
+            isSaving={isSaving}
+            saveLabel={formMode === "edit" ? "Update" : "Save"}
+          />
+        </ModalContent>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && !isDeleting && setDeleteTarget(null)}
+      >
+        <ModalContent className="max-w-md">
+          <ModalHeader>
+            <ModalTitle>Delete opening balance?</ModalTitle>
+            <ModalDescription>
+              This will permanently remove the opening balance for{" "}
+              <span className="font-medium text-foreground">
+                {deleteTarget?.glCode}
+              </span>{" "}
+              ({deleteTarget?.financialYear}). This action cannot be undone.
+            </ModalDescription>
+          </ModalHeader>
+          <FormActions>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+          </FormActions>
+        </ModalContent>
+      </Modal>
+
+      {/* Post Success Dialog */}
+      <Modal
+        open={showPostDialog}
+        onOpenChange={(open) => !open && setShowPostDialog(false)}
+      >
+        <ModalContent className="max-w-md">
+          <ModalHeader>
+            <ModalTitle>Opening Balances Posted Successfully</ModalTitle>
+            <ModalDescription>
+              {postResult && (
+                <div className="mt-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Journal Number:</span>
+                    <span className="font-medium">{postResult.journalNumber}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Journal ID:</span>
+                    <span className="font-medium">{postResult.journalId}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Records Posted:</span>
+                    <span className="font-medium">{postResult.recordsPosted}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Debit:</span>
+                    <span className="font-medium">
+                      ${Number(postResult.totalDebit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Credit:</span>
+                    <span className="font-medium">
+                      ${Number(postResult.totalCredit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </ModalDescription>
+          </ModalHeader>
+          <FormActions>
+            <Button
+              type="button"
+              onClick={() => setShowPostDialog(false)}
+            >
+              Close
+            </Button>
+          </FormActions>
+        </ModalContent>
+      </Modal>
+
     </div>
   );
 }
-
-export default OpeningModule;

@@ -1,15 +1,42 @@
-table {
-  font-family: arial, sans-serif;
+table,
+table.app-table {
+  font-family: inherit;
   border-collapse: collapse;
   width: 100%;
+  font-size: 0.875rem;
 }
 
-td,
-th {
-  border: 1px solid #dddddd;
-  padding: 8px;
+table td,
+table th,
+table.app-table td,
+table.app-table th {
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  padding: 0.75rem 1rem;
   text-align: left;
   vertical-align: middle;
+}
+
+table thead th,
+table.app-table thead th {
+  background-color: color-mix(in oklab, var(--muted, #f4f4f5) 70%, transparent);
+  font-weight: 600;
+  color: var(--foreground, #0f172a);
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+table tbody tr,
+table.app-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+table tbody tr:nth-child(even),
+table.app-table tbody tr:nth-child(even) {
+  background-color: color-mix(in oklab, var(--muted, #f4f4f5) 38%, transparent);
+}
+
+table tbody tr:hover,
+table.app-table tbody tr:hover {
+  background-color: color-mix(in oklab, var(--muted, #f4f4f5) 58%, transparent);
 }
 
 th.num,
@@ -20,8 +47,4 @@ td.num {
 td.text-center,
 th.text-center {
   text-align: center;
-}
-
-tr:nth-child(even) {
-  background-color: #dddddd;
 }

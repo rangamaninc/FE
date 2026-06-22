@@ -1,66 +1,82 @@
-import React, { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import PropTypes from "prop-types";
-
-import Grid from "@mui/material/Grid";
-import Box from "@mui/material/Box";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
-import { Button } from "@mui/material";
+import { Plus } from "lucide-react";
 
 import AddNewTransactionModal from "./AddNewTransactionModal";
+import CashBookTable from "./CashBookTable";
+import WorkingPapersPageLayout from "../WorkingPapersPageLayout";
 import { CASHBOOKS_LIST } from "../constants";
 import { getCashbookMonthlyBalances } from "../../../api/cashbook";
 import { getSelectedClient } from "../../../redux/globalSlice";
-import Loader from "../../../components/Loader";
 import PrepaidInfoModal from "./PrepaidInfoModal";
+import {
+  Button,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../components/ui";
 
 export default function CashBook({ handleTabChange }) {
   const selectedClient = useSelector(getSelectedClient);
   const [selectedCashBook, setSelectedCashBook] = useState(
     CASHBOOKS_LIST.length > 0 ? CASHBOOKS_LIST[0].code : ""
   );
-
-  const [showLoader, setShowLoader] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [monthlyBalances, setMonthlyBalances] = useState([]);
-
   const [showNewTransactionModal, setShowNewTransactionModal] = useState(false);
   const [showPrepaidInfoModal, setShowPrepaidInfoModal] = useState(false);
 
-  const handleCashbookChange = (e) => {
-    setSelectedCashBook(e.target.value);
-    setShowLoader(true);
-  };
+  const selectedCashBookLabel = useMemo(
+    () =>
+      CASHBOOKS_LIST.find((cashbook) => cashbook.code === selectedCashBook)
+        ?.desc ?? "Cash book",
+    [selectedCashBook]
+  );
 
-  const fetchCashbookMonthlyBalances = React.useCallback(async () => {
-    const res = await getCashbookMonthlyBalances(
-      selectedClient.id,
-      selectedCashBook
-    );
-    if (res?.balances) {
-      setMonthlyBalances(res.balances);
+  const displayYear = monthlyBalances[0]?.year ?? new Date().getFullYear();
+
+  const fetchCashbookMonthlyBalances = useCallback(async () => {
+    if (!selectedClient?.id || !selectedCashBook) {
+      setMonthlyBalances([]);
+      setLoading(false);
+      return;
     }
-    setShowLoader(false);
+
+    setLoading(true);
+    try {
+      const res = await getCashbookMonthlyBalances(
+        selectedClient.id,
+        selectedCashBook
+      );
+      setMonthlyBalances(res?.balances ?? []);
+    } catch {
+      setMonthlyBalances([]);
+    } finally {
+      setLoading(false);
+    }
   }, [selectedClient, selectedCashBook]);
 
   useEffect(() => {
-    if (selectedClient && selectedCashBook) {
+    fetchCashbookMonthlyBalances();
+  }, [fetchCashbookMonthlyBalances]);
+
+  const handleModalClose = (isPrepaidTransaction = false) => {
+    setShowNewTransactionModal(false);
+    if (isPrepaidTransaction) {
+      setShowPrepaidInfoModal(true);
+    } else {
       fetchCashbookMonthlyBalances();
     }
-  }, [selectedCashBook, selectedClient, fetchCashbookMonthlyBalances]);
+  };
 
   return (
-    <div>
+    <>
       <AddNewTransactionModal
         showModal={showNewTransactionModal}
-        handleClose={(isPrepaidTransaction = false) => {
-          setShowNewTransactionModal(false);
-          if (isPrepaidTransaction) {
-            setShowPrepaidInfoModal(true);
-          } else {
-            window.location.reload();
-          }
-        }}
+        handleClose={handleModalClose}
         selectedClientId={selectedClient.id}
         selectedCashBookId={selectedCashBook}
       />
@@ -68,97 +84,54 @@ export default function CashBook({ handleTabChange }) {
         showModal={showPrepaidInfoModal}
         handleClose={() => {
           setShowPrepaidInfoModal(false);
-          window.location.reload();
+          fetchCashbookMonthlyBalances();
         }}
         handleTabChange={handleTabChange}
       />
-      <Grid container spacing={3}>
-        <Grid item xs={3}>
-          {CASHBOOKS_LIST.length > 0 && (
-            <Select
-              value={selectedCashBook}
-              displayEmpty
-              inputProps={{ "aria-label": "Without label" }}
-              onChange={handleCashbookChange}
-            >
-              {CASHBOOKS_LIST.map((cashbook) => {
-                return (
-                  <MenuItem
-                    key={cashbook.code}
-                    value={cashbook.code}
-                    defaultChecked
-                  >
-                    {cashbook.desc}
-                  </MenuItem>
-                );
-              })}
-            </Select>
-          )}
-        </Grid>
-        <Grid item xs={6} />
-        <Grid item xs={2}>
+
+      <WorkingPapersPageLayout
+        title={`For Year - ${displayYear}`}
+        subtitle={`Monthly balances for ${selectedCashBookLabel}.`}
+        loading={loading}
+        loadingLabel="Loading cash book..."
+        action={
           <Button
-            variant="contained"
+            type="button"
+            className="w-fit shrink-0 self-end sm:self-auto"
             onClick={() => setShowNewTransactionModal(true)}
           >
+            <Plus className="h-4 w-4" />
             Add Entry
           </Button>
-        </Grid>
-      </Grid>
-      {showLoader ? (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "50vh",
-          }}
-        >
-          <Loader />
-        </div>
-      ) : (
-        <Box sx={{ margin: 5, width: "75%" }}>
-          {monthlyBalances.length > 0 && (
-            <>
-              <div style={{ textAlign: "center", marginBottom: 20 }}>
-                <b>For Year - {monthlyBalances[0].year}</b>
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Month</th>
-                    <th className="num">Opening Balance</th>
-                    <th className="num">Receipts Received</th>
-                    <th className="num">Payments Payable</th>
-                    <th className="num">Closing Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyBalances.map((balanceObj) => {
-                    const {
-                      month,
-                      openingBalance,
-                      receiptsReceived,
-                      paymentsReceived,
-                      closingBalance,
-                    } = balanceObj;
-                    return (
-                      <tr key={month}>
-                        <td>{month}</td>
-                        <td className="num">{openingBalance}</td>
-                        <td className="num">{receiptsReceived}</td>
-                        <td className="num">{paymentsReceived}</td>
-                        <td className="num">{closingBalance}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </>
-          )}
-        </Box>
-      )}
-    </div>
+        }
+        filters={
+          CASHBOOKS_LIST.length > 0 ? (
+            <Select
+              value={String(selectedCashBook)}
+              onValueChange={(value) => setSelectedCashBook(Number(value))}
+            >
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Select cash book" />
+              </SelectTrigger>
+              <SelectContent>
+                {CASHBOOKS_LIST.map((cashbook) => (
+                  <SelectItem key={cashbook.code} value={String(cashbook.code)}>
+                    {cashbook.desc}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null
+        }
+      >
+        <CashBookTable
+          className="flex-1"
+          records={monthlyBalances}
+          onRefresh={fetchCashbookMonthlyBalances}
+          isRefreshing={loading}
+        />
+      </WorkingPapersPageLayout>
+    </>
   );
 }
 

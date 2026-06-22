@@ -340,7 +340,7 @@ export default function AddNewTransactionModal({
 AddNewTransactionModal.propTypes = {
   showModal: PropTypes.bool.isRequired,
   handleClose: PropTypes.func.isRequired,
-  selectedClientId: PropTypes.string.isRequired,
+  selectedClientId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   selectedCashBookId: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
     .isRequired,
 };

@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
-import { Button } from "@mui/material";
 
 import {
   getReconcileRecords,
@@ -12,30 +11,74 @@ import EditInsuranceModal from "./EditInsuranceModal";
 import EditInvestmentModal from "./EditInvestmentModal";
 import EditAccuralModal from "./EditAccuralModal";
 import EditLossRunsModal from "./EditLossRunsModal";
+import WorkingPapersPageLayout from "../WorkingPapersPageLayout";
+import { DataTable } from "../../../components/ui";
+import { amountColumn, dateColumn } from "../workingPapersUtils";
 
 function Reconcile() {
   const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showPrepaidModal, setShowPrepaidModal] = useState(false);
   const [showInsuranceModal, setShowInsuranceModal] = useState(false);
   const [showInvestmentModal, setShowInvestmentModal] = useState(false);
   const [showAccuralModal, setShowAccuralModal] = useState(false);
   const [showLossRunsModal, setShowLossRunsModal] = useState(false);
-
   const [selectedRecord, setSelectedRecord] = useState({});
   const selectedClient = useSelector(getSelectedClient);
 
   const fetchRecords = useCallback(async () => {
-    const res = await getReconcileRecords(selectedClient.id);
-    if (res.success) {
-      setRecords(res.pendingSubTransactions);
+    if (!selectedClient?.id) {
+      setRecords([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await getReconcileRecords(selectedClient.id);
+      if (res.success) {
+        setRecords(res.pendingSubTransactions);
+      } else {
+        setRecords([]);
+      }
+    } catch {
+      setRecords([]);
+    } finally {
+      setLoading(false);
     }
   }, [selectedClient]);
 
   useEffect(() => {
-    if (selectedClient) {
-      fetchRecords();
+    fetchRecords();
+  }, [fetchRecords]);
+
+  const openEditModal = useCallback((record) => {
+    const { subtransactionType } = record;
+    setSelectedRecord(record);
+
+    if (subtransactionType === "PREPAID") {
+      setShowPrepaidModal(true);
+    } else if (subtransactionType === "INVESTMENT") {
+      setShowInvestmentModal(true);
+    } else if (subtransactionType === "ACCURAL") {
+      setShowAccuralModal(true);
+    } else if (subtransactionType === "LOSS RUNS") {
+      setShowLossRunsModal(true);
+    } else {
+      setShowInsuranceModal(true);
     }
-  }, [selectedClient, fetchRecords]);
+  }, []);
+
+  const columns = useMemo(
+    () => [
+      dateColumn("transactionDate", "Transaction Date"),
+      { accessorKey: "transactionType", header: "Transaction Type" },
+      { accessorKey: "subtransactionType", header: "Sub Transaction Type" },
+      { accessorKey: "glcode", header: "GL Code" },
+      amountColumn("amount", "Amount"),
+    ],
+    []
+  );
 
   const handleSave = async (reconcileData) => {
     const {
@@ -59,23 +102,14 @@ function Reconcile() {
 
     if (isInsuranceTransaction) {
       const { policies } = reconcileData;
-      bodyParams = {
-        ...bodyParams,
-        policies,
-      };
+      bodyParams = { ...bodyParams, policies };
       setShowInsuranceModal(false);
     } else if (isInvestmentTransaction) {
-      bodyParams = {
-        ...bodyParams,
-        ...reconcileData,
-      };
+      bodyParams = { ...bodyParams, ...reconcileData };
       setShowInvestmentModal(false);
     } else if (isAccuralTransaction) {
       setShowAccuralModal(false);
-      bodyParams = {
-        ...bodyParams,
-        reconcileData,
-      };
+      bodyParams = { ...bodyParams, reconcileData };
     } else {
       setShowPrepaidModal(false);
       const { fromDate, toDate, monetisation } = reconcileData;
@@ -86,17 +120,15 @@ function Reconcile() {
         monetisation,
       };
     }
-    const res = await updateReconcileRecord(selectedClient.id, bodyParams);
 
+    const res = await updateReconcileRecord(selectedClient.id, bodyParams);
     if (res.success) {
-      setTimeout(() => {
-        fetchRecords();
-      }, 500);
+      fetchRecords();
     }
   };
 
   return (
-    <div style={{ margin: 20 }}>
+    <>
       <EditPrepaidModal
         showModal={showPrepaidModal}
         handleClose={() => setShowPrepaidModal(false)}
@@ -131,63 +163,27 @@ function Reconcile() {
         handleSave={handleSave}
         clientId={selectedClient.id}
       />
-      <h4 className="text-center mb-4">Reconcile Pending Transactions</h4>
-      <div className="mx-5">
-        <table>
-          <thead>
-            <tr>
-              <th>Transaction Date</th>
-              <th>Transaction Type</th>
-              <th>Sub Transaction Type</th>
-              <th>GL Code</th>
-              <th className="num">Amount</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {records.map((record, index) => {
-              const {
-                transactionid,
-                transactionDate,
-                transactionType,
-                subtransactionType,
-                glcode,
-                amount,
-              } = record;
-              return (
-                <tr key={transactionid + index}>
-                  <td>{transactionDate}</td>
-                  <td>{transactionType}</td>
-                  <td>{subtransactionType}</td>
-                  <td>{glcode}</td>
-                  <td className="num">{amount}</td>
-                  <td>
-                    <Button
-                      onClick={() => {
-                        if (subtransactionType === "PREPAID") {
-                          setShowPrepaidModal(true);
-                        } else if (subtransactionType === "INVESTMENT") {
-                          setShowInvestmentModal(true);
-                        } else if (subtransactionType === "ACCURAL") {
-                          setShowAccuralModal(true);
-                        } else if (subtransactionType === "LOSS RUNS") {
-                          setShowLossRunsModal(true);
-                        } else {
-                          setShowInsuranceModal(true);
-                        }
-                        setSelectedRecord(record);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
+
+      <WorkingPapersPageLayout
+        title="Reconcile Pending Transactions"
+        subtitle="Review and reconcile pending sub-transactions."
+        loading={loading}
+        loadingLabel="Loading pending transactions..."
+      >
+        <DataTable
+          className="flex-1"
+          columns={columns}
+          data={records}
+          pageSize={10}
+          onEdit={openEditModal}
+          onRefresh={fetchRecords}
+          isRefreshing={loading}
+          excelFileName="reconcile-pending"
+          emptyTitle="No pending transactions"
+          emptyDescription="All sub-transactions are reconciled."
+        />
+      </WorkingPapersPageLayout>
+    </>
   );
 }
 
